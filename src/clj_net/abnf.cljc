@@ -19,6 +19,8 @@
      (let [[rule lines] (read-rule-str lines)]
        (cons rule (read-rule-strs lines))))))
 
+;; FIXME skip start non define lines
+
 (defn rule-strs-seq [s]
   (->> s str/split-lines (map str/trim) (remove empty?) read-rule-strs))
 
