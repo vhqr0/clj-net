@@ -89,4 +89,4 @@ sub-delims    = \"!\" / \"$\" / \"&\" / \"'\" / \"(\" / \")\"
   (abnf/compile-rules-text rules-text))
 
 (comment
-  (abnf/match rules "URI" "http://localhost:80"))
+  (-> (abnf/match rules "URI" "http://localhost:80") abnf/simplify-match))

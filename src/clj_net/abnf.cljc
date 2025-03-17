@@ -109,8 +109,9 @@
 
 (defmethod read-token \< [s]
   (let [[id s] (read-id-token (rest s))]
-    (assert (= (first s) \>))
-    [id (rest s)]))
+    (if (= (first s) \>)
+      [id (rest s)]
+      (throw (ex-info "invalid id token: unclosed <" {:reason :lexer/id})))))
 
 ^:rct/test
 (comment
@@ -124,10 +125,11 @@
   {:pre [(= (first s) \")]}
   (loop [cs [] s (rest s)]
     (let [c (first s)]
-      (assert (some? c))
-      (if (= c \")
-        [(str/join cs) (rest s)]
-        (recur (conj cs c) (rest s))))))
+      (if (some? c)
+        (if (= c \")
+          [(str/join cs) (rest s)]
+          (recur (conj cs c) (rest s)))
+        (throw (ex-info "invalid str token: unclosed \"" {:reason :lexer/str}))))))
 
 (defn read-str-token [s case-sensitive?]
   (let [[str s] (read-str-literal s)
@@ -168,18 +170,21 @@
   (read-literal char-literal-chars s))
 
 (defn str->int [s base char-map]
-  {:pre [(every? #(contains? char-map %) s)]
-   :post [(<= 0 % 255)]}
+  {:pre [(every? #(contains? char-map %) s)]}
   (->> s
        (reduce
         (fn [i c]
           (+ (* base i) (get char-map c)))
         0)))
 
+(defn str->ascii-int [s base char-map]
+  {:post [(<= 0 % 255)]}
+  (str->int s base char-map))
+
 (defn char-literal->token [s base char-map]
   (let [sp (str/split s #"-" 2)]
     (if (= (count sp) 2)
-      (let [[start end] (->> sp (map #(str->int % base char-map)))
+      (let [[start end] (->> sp (map #(str->ascii-int % base char-map)))
             chars (->> (range start (inc end)) (map char) set)]
         {:type :chars :chars chars})
       (let [str (->> (str/split s #"\.")
@@ -288,13 +293,15 @@
 
 (defmethod read-expr :group-open [tokens]
   (let [[expr tokens] (read-alt-expr (rest tokens))]
-    (assert (= :group-close (-> tokens first :type)))
-    [expr (rest tokens)]))
+    (if (= :group-close (-> tokens first :type))
+      [expr (rest tokens)]
+      (throw (ex-info "invalid group token: unclosed group" {:reason :parser/group})))))
 
 (defmethod read-expr :opt-open [tokens]
   (let [[expr tokens] (read-alt-expr (rest tokens))]
-    (assert (= :opt-close (-> tokens first :type)))
-    [{:type :opt :expr expr} (rest tokens)]))
+    (if (= :opt-close (-> tokens first :type))
+      [{:type :opt :expr expr} (rest tokens)]
+      (throw (ex-info "invalid opt token: unclosed opt" {:reason :parser/opt})))))
 
 (defn read-cat-expr [tokens]
   (loop [exprs [] tokens tokens]
@@ -318,14 +325,15 @@
 
 (defn read-define-stmt [tokens]
   (let [[[id define] tokens] (split-at 2 tokens)]
-    (assert (= :id (:type id)))
-    (assert (= :define (:type define)))
-    (let [[inc-alt? tokens] (if-not (= :alt (-> tokens first :type))
-                              [false tokens]
-                              [true (rest tokens)])
-          [expr tokens] (read-alt-expr tokens)]
-      (assert (empty? tokens))
-      {:id (:id id) :inc-alt? inc-alt? :expr expr})))
+    (if (and (= :id (:type id)) (= :define (:type define)))
+      (let [[inc-alt? tokens] (if-not (= :alt (-> tokens first :type))
+                                [false tokens]
+                                [true (rest tokens)])
+            [expr tokens] (read-alt-expr tokens)]
+        (if (empty? tokens)
+          {:id (:id id) :inc-alt? inc-alt? :expr expr}
+          (throw (ex-info "invalid define stmt: unknown tokens" {:reason :parser/define}))))
+      (throw (ex-info "invalid define stmt: invalid define token" {:reason :parser/define})))))
 
 (comment
   (-> "rulelist       =  1*( rule / (*c-wsp c-nl) )" tokens-seq read-define-stmt)
@@ -361,8 +369,9 @@
            (if-not inc-alt?
              (assoc m id expr)
              (let [orig-expr (get m id)]
-               (assert (some? orig-expr))
-               (assoc m id {:type :alt :exprs [orig-expr expr]}))))
+               (if (some? orig-expr)
+                 (assoc m id {:type :alt :exprs [orig-expr expr]})
+                 (throw (ex-info "invalid inc alt define: unknown id" {:reason :compile/reduce :id id}))))))
          base))))
 
 (def core-rules-text "
@@ -437,10 +446,11 @@ WSP            =  SP / HTAB
 (defmethod match-expr :id [rules expr s]
   (let [{:keys [id]} expr
         sub-expr (get rules id)]
-    (assert (some? sub-expr))
-    (when-let [[match s] (match-expr rules sub-expr s)]
-      (let [{:keys [str]} match]
-        [{:str str :expr expr :sub-matches [match]} s]))))
+    (if (some? sub-expr)
+      (when-let [[match s] (match-expr rules sub-expr s)]
+        (let [{:keys [str]} match]
+          [{:str str :expr expr :sub-matches [match]} s]))
+      (throw (ex-info "invalid id expr: unknown id" {:reason :match/id :id id})))))
 
 (defmethod match-expr :str [_rules expr s]
   (let [{:keys [case-sensitive? str]} expr
@@ -500,8 +510,28 @@ WSP            =  SP / HTAB
               (let [{:keys [str]} match]
                 [{:str str :expr expr :sub-matches [match]} s])))))))
 
+(defmethod match-expr :ref [_rules expr s]
+  (let [{:keys [id rules]} expr
+        sub-expr (get rules id)]
+    (if (some? sub-expr)
+      (when-let [[match s] (match-expr rules sub-expr s)]
+        (let [{:keys [str]} match]
+          [{:str str :expr expr :sub-matches [match]} s]))
+      (throw (ex-info "invalid ref expr: unknown id" {:reason :match/ref :id id})))))
+
 (defn match [rules rule-id s]
   (let [expr {:type :id :id (str/lower-case rule-id)}]
     (when-let [[match s] (match-expr rules expr s)]
       (when (empty? s)
         match))))
+
+(defn simplify-match
+  ([match]
+   (simplify-match match nil))
+  ([match {:keys [min-match-str-cnt] :or {min-match-str-cnt 4}}]
+   (letfn [(f [{:keys [str expr sub-matches] :as match}]
+             (let [id (when (= (:type expr) :id) (:id expr))]
+               (cond-> {:str str}
+                 (some? id) (assoc :id id)
+                 (>= (count str) min-match-str-cnt) (assoc :sub-matches (->> sub-matches (remove (comp empty? :str)) (mapv f))))))]
+     (f match))))
