@@ -10,7 +10,7 @@
   (loop [rule-lines [(first lines)] lines (rest lines)]
     (let [line (first lines)]
       (if (or (nil? line) (re-find define-stmt-re line))
-        [(str/join rule-lines) lines]
+        [(str/join \newline rule-lines) lines]
         (recur (conj rule-lines line) (rest lines))))))
 
 (defn read-rule-strs [lines]
