@@ -191,7 +191,7 @@
                      (map #(str->int % base char-map))
                      (map char)
                      str/join)]
-        {:type :str :str str}))))
+        {:type :str :case-sensitive? true :str str}))))
 
 (defn read-char-token [s base char-map]
   (let [[char-literal s] (read-char-literal s)]
@@ -529,7 +529,7 @@ WSP            =  SP / HTAB
   ([match]
    (simplify-match match nil))
   ([match {:keys [min-match-str-cnt] :or {min-match-str-cnt 4}}]
-   (letfn [(f [{:keys [str expr sub-matches] :as match}]
+   (letfn [(f [{:keys [str expr sub-matches]}]
              (let [id (when (= (:type expr) :id) (:id expr))]
                (cond-> {:str str}
                  (some? id) (assoc :id id)
