@@ -25,11 +25,12 @@ delta-seconds = 1*DIGIT
 ")
 
 (def refs
-  {"http-date" {:type :ref :id "http-date" :rules rfc9110/rules}
-   "ows" {:type :ref :id "ows" :rules rfc9110/rules}
-   "field-name" {:type :ref :id "field-name" :rules rfc9110/rules}
-   "quoted-string" {:type :ref :id "quoted-string" :rules rfc9110/rules}
-   "token" {:type :ref :id "token" :rules rfc9110/rules}})
+  (-> {}
+      (abnf/refer-to "HTTP-date" rfc9110/rules)
+      (abnf/refer-to "OWS" rfc9110/rules)
+      (abnf/refer-to "field-name" rfc9110/rules)
+      (abnf/refer-to "quoted-string" rfc9110/rules)
+      (abnf/refer-to "token" rfc9110/rules)))
 
 (def rules
   (abnf/compile-rules-text (merge abnf/core-rules refs) rules-text))

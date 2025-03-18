@@ -226,21 +226,22 @@ year = 4DIGIT
 ")
 
 (def refs
-  {"uri-reference" {:type :ref :id "uri-reference" :rules rfc3986/rules}
-   "absolute-uri" {:type :ref :id "absolute-uri" :rules rfc3986/rules}
-   "relative-part" {:type :ref :id "relative-part" :rules rfc3986/rules}
-   "segment" {:type :ref :id "segment" :rules rfc3986/rules}
-   "authority" {:type :ref :id "authority" :rules rfc3986/rules}
-   "port" {:type :ref :id "port" :rules rfc3986/rules}
-   "query" {:type :ref :id "query" :rules rfc3986/rules}
-   "uri-host" {:type :ref :id "host" :rules rfc3986/rules}
-   "path-abempty" {:type :ref :id "path-abempty" :rules rfc3986/rules}
-   "language-range" {:type :ref :id "language-range" :rules rfc4647/rules}
-   "language-tag" {:type :ref :id "language-tag" :rules rfc5646/rules}
-   "mailbox" {:type :ref :id "mailbox" :rules rfc5322/rules}})
+  (-> {}
+      (abnf/refer-to "URI-reference" rfc3986/rules)
+      (abnf/refer-to "absolute-URI" rfc3986/rules)
+      (abnf/refer-to "authority" rfc3986/rules)
+      (abnf/refer-to "path-abempty" rfc3986/rules)
+      (abnf/refer-to "port" rfc3986/rules)
+      (abnf/refer-to "query" rfc3986/rules)
+      (abnf/refer-to "relative-part" rfc3986/rules)
+      (abnf/refer-to "segment" rfc3986/rules)
+      (abnf/refer-to "host" rfc3986/rules "uri-host")
+      (abnf/refer-to "language-range" rfc4647/rules)
+      (abnf/refer-to "language-tag" rfc5646/rules)
+      (abnf/refer-to "mailbox" rfc5322/rules)))
 
 (def rules
   (abnf/compile-rules-text (merge abnf/core-rules refs) rules-text))
 
 (comment
-  (-> (abnf/match rules "http-uri" "http://localhost:1080") abnf/simplify-match))
+  (-> (abnf/match rules "http-URI" "http://localhost:1080") abnf/simplify-match))

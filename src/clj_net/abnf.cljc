@@ -19,19 +19,25 @@
      (let [[rule lines] (read-rule-str lines)]
        (cons rule (read-rule-strs lines))))))
 
-;; FIXME skip start non define lines
-
 (defn rule-strs-seq [s]
-  (->> s str/split-lines (map str/trim) (remove empty?) read-rule-strs))
+  (->> (str/split-lines s)
+       (map str/trim)
+       (remove empty?)
+       (drop-while #(str/starts-with? % ";"))
+       read-rule-strs))
 
 (comment
-  (-> "rulelist       =  1*( rule / (*c-wsp c-nl) )
+  (-> ";; begin
+
+       rulelist       =  1*( rule / (*c-wsp c-nl) )
 
        rule           =  rulename defined-as elements c-nl
                               ; continues if next line starts
                               ;  with white space
 
-       rulename       =  ALPHA *(ALPHA / DIGIT / \"-\")"
+       rulename       =  ALPHA *(ALPHA / DIGIT / \"-\")
+
+       ;; end"
       rule-strs-seq))
 
 (defmulti read-token
@@ -520,6 +526,12 @@ WSP            =  SP / HTAB
         (let [{:keys [str]} match]
           [{:str str :expr expr :sub-matches [match]} s]))
       (throw (ex-info "invalid ref expr: unknown id" {:reason :match/ref :id id})))))
+
+(defn refer-to
+  ([m id rules]
+   (refer-to m id rules id))
+  ([m id rules as]
+   (assoc m (str/lower-case as) {:type :ref :id (str/lower-case id) :rules rules})))
 
 (defn match [rules rule-id s]
   (let [expr {:type :id :id (str/lower-case rule-id)}]

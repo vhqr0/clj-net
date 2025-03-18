@@ -4,11 +4,11 @@
             [clj-net.abnf.rfc9110 :as rfc9110]))
 
 (def rules-text "
+;; BWS = <BWS, see [HTTP], Section 5.6.3>
+
 HTTP-message = start-line CRLF *( field-line CRLF ) CRLF [ message-body ]
 HTTP-name = %x48.54.54.50 ; HTTP
 HTTP-version = HTTP-name \"/\" DIGIT \".\" DIGIT
-
-;; bws = <BWS, see [HTTP], Section 5.6.3>
 
 ;; OWS = <OWS, see [HTTP], Section 5.6.3>
 
@@ -66,24 +66,25 @@ trailer-section = *( field-line CRLF )
 ")
 
 (def refs
-  {"bws" {:type :ref :id "bws" :rules rfc9110/rules}
-   "ows" {:type :ref :id "ows" :rules rfc9110/rules}
-   "rws" {:type :ref :id "rws" :rules rfc9110/rules}
-   "absolute-uri" {:type :ref :id "absolute-uri" :rules rfc3986/rules}
-   "absolute-path" {:type :ref :id "absolute-path" :rules rfc9110/rules}
-   "authority" {:type :ref :id "authority" :rules rfc3986/rules}
-   "field-name" {:type :ref :id "field-name" :rules rfc9110/rules}
-   "field-value" {:type :ref :id "field-value" :rules rfc9110/rules}
-   "obs-text" {:type :ref :id "obs-text" :rules rfc9110/rules}
-   "port" {:type :ref :id "port" :rules rfc3986/rules}
-   "query" {:type :ref :id "query" :rules rfc3986/rules}
-   "quoted-string" {:type :ref :id "quoted-string" :rules rfc9110/rules}
-   "token" {:type :ref :id "token" :rules rfc9110/rules}
-   "transfer-coding" {:type :ref :id "transfer-coding" :rules rfc9110/rules}
-   "uri-host" {:type :ref :id "host" :rules rfc3986/rules}})
+  (-> {}
+      (abnf/refer-to "BWS" rfc9110/rules)
+      (abnf/refer-to "OWS" rfc9110/rules)
+      (abnf/refer-to "RWS" rfc9110/rules)
+      (abnf/refer-to "absolute-URI" rfc3986/rules)
+      (abnf/refer-to "absolute-path" rfc9110/rules)
+      (abnf/refer-to "authority" rfc3986/rules)
+      (abnf/refer-to "field-name" rfc9110/rules)
+      (abnf/refer-to "field-value" rfc9110/rules)
+      (abnf/refer-to "obs-text" rfc9110/rules)
+      (abnf/refer-to "port" rfc3986/rules)
+      (abnf/refer-to "query" rfc3986/rules)
+      (abnf/refer-to "quoted-string" rfc9110/rules)
+      (abnf/refer-to "token" rfc9110/rules)
+      (abnf/refer-to "transfer-coding" rfc9110/rules)
+      (abnf/refer-to "host" rfc3986/rules "uri-host")))
 
 (def rules
   (abnf/compile-rules-text (merge abnf/core-rules refs) rules-text))
 
 (comment
-  (-> (abnf/match rules "http-message" "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n") abnf/simplify-match))
+  (-> (abnf/match rules "HTTP-message" "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n") abnf/simplify-match))
