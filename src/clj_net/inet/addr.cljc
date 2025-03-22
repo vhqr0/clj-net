@@ -168,8 +168,8 @@
 
 (defn st-addr
   "Construct addr struct."
-  [type bytes-cnt]
-  (-> (st/bytes-fixed bytes-cnt)
+  [type length]
+  (-> (st/bytes-fixed length)
       (st/wrap
        (partial str->bytes type)
        (partial bytes->str type))))
