@@ -278,3 +278,76 @@
    :type st/uint8
    :code st/uint8
    :chksum st/uint16-be))
+
+;;; udp
+
+;; RFC 768
+
+(def udp-port-map
+  {:dns            53
+   :dhcpv4-client  67
+   :dhcpv6-sever   68
+   :dhcpv6-client 546
+   :dhcpv6-server 547})
+
+(def st-udp
+  (st/keys
+   :sport st/uint16-be
+   :dport st/uint16-be
+   :len st/uint16-be
+   :chksum st/uint16-be))
+
+;;; tcp
+
+;; RFC 9293
+
+(defn tcp-dataofs->oslen
+  "Get tcp options length."
+  [dataofs]
+  {:pre [(>= dataofs 5)]}
+  (* 4 (- dataofs 5)))
+
+(defn tcp-oslen->dataofs
+  "Get tcp data offsets."
+  [oslen]
+  {:pre [(zero? (mod oslen 4))]}
+  (+ (quot oslen 4) 5))
+
+(def st-tcp
+  (-> (st/key-fns
+       :sport (constantly st/uint16-be)
+       :dport (constantly st/uint16-be)
+       :seq (constantly st/uint32-be)
+       :ack (constantly st/uint32-be)
+       :dtaofs-reserved (constantly (st/bits [4 4]))
+       :flags (constantly st/uint8)
+       :window (constantly st/uint16-be)
+       :chksum (constantly st/uint16-be)
+       :urgptr (constantly st/uint16-le)
+       :options #(st/bytes-fixed (tcp-dataofs->oslen (:dataofs %))))
+      (st/wrap-vec-destructs
+       {:dataofs-reserved [:dataofs :reserved]})))
+
+(defn tcp-olen->dlen
+  [olen]
+  {:pre [(>= olen 2)]}
+  (- olen 2))
+
+(defn tcp-dlen->olen
+  [dlen]
+  (+ dlen 2))
+
+(def st-tcp-option-data
+  (-> st/uint8
+      (st/wrap
+       tcp-dlen->olen
+       tcp-olen->dlen)
+      st/bytes-var))
+
+(def st-tcp-option
+  (st/key-fns
+   :type (constantly st/uint8)
+   :data (fn [{:keys [type]}]
+           (case type
+             (0 1) (st/bytes-fixed 0)
+             st-tcp-option-data))))
