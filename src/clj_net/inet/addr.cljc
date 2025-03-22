@@ -1,7 +1,8 @@
 (ns clj-net.inet.addr
   (:require [clj-lang-extra.core :refer [str->int hex->int int->hex]]
             [clojure.string :as str]
-            [clj-bytes.core :as b]))
+            [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]))
 
 (defprotocol Addr
   (-str [_])
@@ -161,4 +162,32 @@
   (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])) ; => "2000::"
   (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => "2000::1"
   (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1])) ; => "2000::1:0:0:1"
+  )
+
+;;; structs
+
+(def st-mac
+  "MAC addr struct."
+  (-> (st/bytes-fixed 6)
+      (st/wrap
+       (partial str->bytes :mac)
+       (partial bytes->str :mac))))
+
+(def st-ipv4
+  "IPv4 addr struct."
+  (-> (st/bytes-fixed 4)
+      (st/wrap
+       (partial str->bytes :ipv4)
+       (partial bytes->str :ipv4))))
+
+(def st-ipv6
+  "IPv6 addr struct."
+  (-> (st/bytes-fixed 16)
+      (st/wrap
+       (partial str->bytes :ipv6)
+       (partial bytes->str :ipv6))))
+
+^:rct/test
+(comment
+  (-> (b/make 6) (st/unpack-one st-mac)) ; => "00:00:00:00:00:00"
   )
