@@ -1,4 +1,4 @@
-(ns clj-net.inet.core
+(ns clj-net.inet.inet
   (:require [clj-bytes.core :as b]
             [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]))
