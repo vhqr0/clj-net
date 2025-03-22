@@ -86,18 +86,6 @@
 
 ;; RFC 791
 
-(defn ipv4-ihl->oslen
-  "Get ipv4 options length."
-  [ihl]
-  {:pre [(>= ihl 5)]}
-  (* 4 (- ihl 5)))
-
-(defn ipv4-oslen->ihl
-  "Get ipv4 header length."
-  [oslen]
-  {:pre [(zero? (mod oslen 4))]}
-  (+ (quot oslen 4) 5))
-
 (def st-ipv4
   (-> (st/key-fns
        :version-ihl (constantly (st/bits [4 4]))
@@ -110,26 +98,10 @@
        :chksum (constantly st/uint8)
        :src (constantly ia/st-ipv4)
        :dst (constantly ia/st-ipv4)
-       :options #(st/bytes-fixed (ipv4-ihl->oslen (:ihl %))))
+       :options #(st/bytes-fixed (* 4 (- (:ihl %) 5))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
         :flags-frag [:flags :frag]})))
-
-(defn ipv4-olen->dlen
-  [olen]
-  {:pre [(>= olen 2)]}
-  (- olen 2))
-
-(defn ipv4-dlen->olen
-  [dlen]
-  (+ dlen 2))
-
-(def st-ipv4-option-data
-  (-> st/uint8
-      (st/wrap
-       ipv4-dlen->olen
-       ipv4-olen->dlen)
-      st/bytes-var))
 
 (def st-ipv4-option
   (st/key-fns
@@ -137,7 +109,9 @@
    :data (fn [{:keys [type]}]
            (case type
              (0 1) (st/bytes-fixed 0)
-             st-ipv4-option-data))))
+             (-> st/uint8
+                 (st/wrap #(+ % 2) #(- % 2))
+                 st/bytes-var)))))
 
 ;;; ipv6
 
@@ -154,22 +128,15 @@
       (st/wrap-vec-destructs
        {:version-tc-fl [:version :tc :fl]})))
 
-(defn ipv6-elen->dlen
-  [elen]
-  (+ 6 (* 8 elen)))
-
-(defn ipv6-dlen->elen
-  [dlen]
-  {:pre [(zero? (mod (- dlen 6) 8))]}
-  (quot (- dlen 6) 8))
-
 (def st-ipv6-ext
   (st/keys
    :nh st/uint8
    :data (-> st/uint8
+             (st/wrap-validator
+              #(zero? (mod (- % 6) 8)))
              (st/wrap
-              ipv6-dlen->elen
-              ipv6-elen->dlen)
+              #(quot (- % 6) 8)
+              #(+ 6 (* 8 %)))
              st/bytes-var)))
 
 (def st-ipv6-ext-frag
@@ -181,16 +148,13 @@
       (st/wrap-vec-destructs
        {:offset-m [:offset :res2 :m]})))
 
-(def st-ipv6-option-data
-  (st/bytes-var st/uint8))
-
 (def st-ipv6-option
   (st/key-fns
    :type (constantly st/uint8)
    :data (fn [{:keys [type]}]
            (case type
              0 (st/bytes-fixed 0)
-             st-ipv6-option-data))))
+             (st/bytes-var st/uint8)))))
 
 ;;; icmpv4
 
@@ -236,6 +200,19 @@
    :code st/uint8
    :chksum st/uint16-be))
 
+(def st-icmpv4-unused
+  (st/keys
+   :unused st/uint32-be))
+
+(def st-icmpv4-echo
+  (st/keys
+   :id st/uint16-be
+   :seq st/uint16-be))
+
+(def st-icmpv4-redirect
+  (st/keys
+   :gw ia/st-ipv4))
+
 ;;; icmpv6
 
 ;; RFC 4443 ICMPv6
@@ -252,7 +229,7 @@
    :nd-ra          134
    :nd-ns          135
    :nd-na          136
-   :redirect       137})
+   :nd-redirect    137})
 
 (def icmpv6-dest-unreach-code-map
   {:no-route-to-destination        0
@@ -279,6 +256,63 @@
    :code st/uint8
    :chksum st/uint16-be))
 
+(def st-icmpv6-unused
+  (st/keys
+   :unused st/uint32-be))
+
+(def st-icmpv6-echo
+  (st/keys
+   :id st/uint16-be
+   :seq st/uint16-be))
+
+(def st-icmpv6-packet-too-big
+  (st/keys
+   :mtu st/uint32-be))
+
+(def st-icmpv6-nd-rs
+  (st/keys
+   :res st/uint32-be
+   :options st/bytes))
+
+(def st-icmpv6-nd-ra
+  (-> (st/keys
+       :chlim st/uint8
+       :m-o-res (st/bits [1 1 6])
+       :routerlifetime st/uint16-be
+       :reachabletime st/uint32-be
+       :retranstimer st/uint32-be
+       :options st/bytes)
+      (st/wrap-vec-destructs
+       {:m-o-res [:m :o :res]})))
+
+(def st-icmpv6-nd-ns
+  (st/keys
+   :res st/uint32-be
+   :tgt ia/st-ipv6
+   :options st/bytes))
+
+(def st-icmpv6-nd-na
+  (-> (st/keys
+       :r-s-o-res (st/bits [1 1 1 13])
+       :tgt ia/st-ipv6
+       :options st/bytes)
+      (st/wrap-vec-destructs
+       {:r-s-o-res [:r :s :o :res]})))
+
+(def st-icmpv6-nd-redirect
+  (st/keys
+   :res st/uint32-be
+   :tgt ia/st-ipv6
+   :dst ia/st-ipv6
+   :options st/bytes))
+
+(def st-icmpv6-nd-option
+  (st/keys
+   :type st/uint8
+   :data (-> st/uint8
+             (st/wrap #(+ % 2) #(- % 2))
+             st/bytes-var)))
+
 ;;; udp
 
 ;; RFC 768
@@ -301,18 +335,6 @@
 
 ;; RFC 9293
 
-(defn tcp-dataofs->oslen
-  "Get tcp options length."
-  [dataofs]
-  {:pre [(>= dataofs 5)]}
-  (* 4 (- dataofs 5)))
-
-(defn tcp-oslen->dataofs
-  "Get tcp data offsets."
-  [oslen]
-  {:pre [(zero? (mod oslen 4))]}
-  (+ (quot oslen 4) 5))
-
 (def st-tcp
   (-> (st/key-fns
        :sport (constantly st/uint16-be)
@@ -323,26 +345,10 @@
        :flags (constantly st/uint8)
        :window (constantly st/uint16-be)
        :chksum (constantly st/uint16-be)
-       :urgptr (constantly st/uint16-le)
-       :options #(st/bytes-fixed (tcp-dataofs->oslen (:dataofs %))))
+       :urgptr (constantly st/uint16-be)
+       :options #(st/bytes-fixed (* 4 (- (:dataofs %) 5))))
       (st/wrap-vec-destructs
        {:dataofs-reserved [:dataofs :reserved]})))
-
-(defn tcp-olen->dlen
-  [olen]
-  {:pre [(>= olen 2)]}
-  (- olen 2))
-
-(defn tcp-dlen->olen
-  [dlen]
-  (+ dlen 2))
-
-(def st-tcp-option-data
-  (-> st/uint8
-      (st/wrap
-       tcp-dlen->olen
-       tcp-olen->dlen)
-      st/bytes-var))
 
 (def st-tcp-option
   (st/key-fns
@@ -350,4 +356,6 @@
    :data (fn [{:keys [type]}]
            (case type
              (0 1) (st/bytes-fixed 0)
-             st-tcp-option-data))))
+             (-> st/uint8
+                 (st/wrap #(+ % 2) #(- % 2))
+                 st/bytes-var)))))
