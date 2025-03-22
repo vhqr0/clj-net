@@ -1,5 +1,6 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        io.github.vhqr0/clj-lang-extra {:local/root "../clj-lang-extra"}
         io.github.vhqr0/clj-bytes {:local/root "../clj-bytes"}}
  :aliases {:dev {:extra-paths ["test"]
                  :extra-deps {io.github.matthewdowney/rich-comment-tests {:git/tag "v1.0.3" :git/sha "a8711e9"}}}
