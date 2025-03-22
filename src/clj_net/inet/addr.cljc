@@ -166,26 +166,17 @@
 
 ;;; structs
 
-(def st-mac
-  "MAC addr struct."
-  (-> (st/bytes-fixed 6)
+(defn st-addr
+  "Construct addr struct."
+  [type bytes-cnt]
+  (-> (st/bytes-fixed bytes-cnt)
       (st/wrap
-       (partial str->bytes :mac)
-       (partial bytes->str :mac))))
+       (partial str->bytes type)
+       (partial bytes->str type))))
 
-(def st-ipv4
-  "IPv4 addr struct."
-  (-> (st/bytes-fixed 4)
-      (st/wrap
-       (partial str->bytes :ipv4)
-       (partial bytes->str :ipv4))))
-
-(def st-ipv6
-  "IPv6 addr struct."
-  (-> (st/bytes-fixed 16)
-      (st/wrap
-       (partial str->bytes :ipv6)
-       (partial bytes->str :ipv6))))
+(def st-mac "MAC addr struct." (st-addr :mac 6))
+(def st-ipv4 "IPv4 addr struct." (st-addr :ipv4 4))
+(def st-ipv6 "IPv6 addr struct." (st-addr :ipv6 16))
 
 ^:rct/test
 (comment
