@@ -103,6 +103,9 @@
        {:version-ihl [:version :ihl]
         :flags-frag [:flags :frag]})))
 
+(def ipv4-option-map
+  {:eol 0 :nop 1})
+
 (def st-ipv4-option
   (st/key-fns
    :type (constantly st/uint8)
@@ -143,10 +146,13 @@
   (-> (st/keys
        :nh st/uint8
        :res1 st/uint8
-       :offset-m (st/bits [13 2 1])
+       :offset-res2-m (st/bits [13 2 1])
        :id st/uint32-be)
       (st/wrap-vec-destructs
-       {:offset-m [:offset :res2 :m]})))
+       {:offset-res2-m [:offset :res2 :m]})))
+
+(def ipv6-option-map
+  {:pad1 0 :padn 1})
 
 (def st-ipv6-option
   (st/key-fns
@@ -306,12 +312,44 @@
    :dst ia/st-ipv6
    :options st/bytes))
 
+(def icmpv6-nd-option-map
+  {:src-lladdr   1
+   :dst-lladdr   2
+   :prefix-info  3
+   :redirect-hdr 4
+   :mtu          5})
+
 (def st-icmpv6-nd-option
   (st/keys
    :type st/uint8
    :data (-> st/uint8
              (st/wrap #(+ % 2) #(- % 2))
              st/bytes-var)))
+
+(def st-icmpv6-nd-option-lladdr
+  ia/st-mac)
+
+(def st-icmpv6-nd-option-prefix-info
+  (-> (st/keys
+       :prefixlen st/uint8
+       :l-a-res1 (st/bits [1 1 6])
+       :validlifetime st/uint32-be
+       :preferredlifetime st/uint32-be
+       :res2 st/uint32-be
+       :prefix ia/st-ipv6)
+      (st/wrap-vec-destructs
+       {:l-a-res1 [:l :a :res1]})))
+
+(def st-icmpv6-nd-option-redirect-hdr
+  (st/keys
+   :res1 st/uint16-be
+   :res2 st/uint32-be
+   :pkt st/bytes))
+
+(def st-icmpv6-nd-option-mtu
+  (st/keys
+   :res st/uint16-be
+   :mtu st/uint32-be))
 
 ;;; udp
 
@@ -333,7 +371,9 @@
 
 ;;; tcp
 
-;; RFC 9293
+;; RFC 9293 TCP
+;; RFC 7323 TCP extensions
+;; RFC 2018 TCP sack
 
 (def st-tcp
   (-> (st/key-fns
@@ -359,3 +399,20 @@
              (-> st/uint8
                  (st/wrap #(+ % 2) #(- % 2))
                  st/bytes-var)))))
+
+(def tcp-option-map
+  {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6})
+
+(def tcp-option-mss
+  st/uint16-be)
+
+(def tcp-option-wscale
+  st/uint8)
+
+(def tcp-option-sack
+  (st/coll-of st/uint32-be))
+
+(def tcp-option-timestamp
+  (st/keys
+   :tsval st/uint32-be
+   :tsecr st/uint16-be))
