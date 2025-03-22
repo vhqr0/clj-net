@@ -86,17 +86,17 @@
 
 ;; RFC 791
 
-(defn ipv4-ihl->olen
+(defn ipv4-ihl->oslen
   "Get ipv4 options length."
   [ihl]
   {:pre [(>= ihl 5)]}
   (* 4 (- ihl 5)))
 
-(defn ipv4-olen->ihl
+(defn ipv4-oslen->ihl
   "Get ipv4 header length."
-  [olen]
-  {:pre [(zero? (mod olen 4))]}
-  (+ (quot olen 4) 5))
+  [oslen]
+  {:pre [(zero? (mod oslen 4))]}
+  (+ (quot oslen 4) 5))
 
 (def st-ipv4
   (-> (st/key-fns
@@ -110,10 +110,34 @@
        :chksum (constantly st/uint8)
        :src (constantly ia/st-ipv4)
        :dst (constantly ia/st-ipv4)
-       :options #(st/bytes-fixed (ipv4-ihl->olen (:ihl %))))
+       :options #(st/bytes-fixed (ipv4-ihl->oslen (:ihl %))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
         :flags-frag [:flags :frag]})))
+
+(defn ipv4-olen->dlen
+  [olen]
+  {:pre [(>= olen 2)]}
+  (- olen 2))
+
+(defn ipv4-dlen->olen
+  [dlen]
+  (+ dlen 2))
+
+(def st-ipv4-option-data
+  (-> st/uint8
+      (st/wrap
+       ipv4-dlen->olen
+       ipv4-olen->dlen)
+      st/bytes-var))
+
+(def st-ipv4-option
+  (st/key-fns
+   :type (constantly st/uint8)
+   :data (fn [{:keys [type]}]
+           (case type
+             (0 1) (st/bytes-fixed 0)
+             st-ipv4-option-data))))
 
 ;;; ipv6
 
@@ -129,11 +153,6 @@
        :dst ia/st-ipv4)
       (st/wrap-vec-destructs
        {:version-tc-fl [:version :tc :fl]})))
-
-(def st-ipv6-option
-  (st/keys
-   :type st/uint8
-   :data (st/bytes-var st/uint8)))
 
 (defn ipv6-elen->dlen
   [elen]
@@ -161,3 +180,14 @@
        :id st/uint32-be)
       (st/wrap-vec-destructs
        {:offset-m [:offset :res2 :m]})))
+
+(def st-ipv6-option-data
+  (st/bytes-var st/uint8))
+
+(def st-ipv6-option
+  (st/key-fns
+   :type (constantly st/uint8)
+   :data (fn [{:keys [type]}]
+           (case type
+             0 (st/bytes-fixed 0)
+             st-ipv6-option-data))))
