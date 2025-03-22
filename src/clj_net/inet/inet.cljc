@@ -203,7 +203,7 @@
    :source-quench        4
    :redirect             5
    :time-exceeded       11
-   :parameter-problem   12
+   :param-problem       12
    :timestamp-request   13
    :timestamp-reply     14
    :information-request 15
@@ -227,10 +227,53 @@
   {:ttl-zero-during-transit    0
    :ttl-zero-during-reassembly 1})
 
-(def icmpv4-parameter-problem-code-map
+(def icmpv4-param-problem-code-map
   {:ip-header-bad 0})
 
 (def st-icmpv4
+  (st/keys
+   :type st/uint8
+   :code st/uint8
+   :chksum st/uint16-be))
+
+;;; icmpv6
+
+;; RFC 4443 ICMPv6
+;; RFC 4861 NDP
+
+(def icmpv6-type-map
+  {:dest-unreach     1
+   :packet-too-big   2
+   :time-exceeded    3
+   :param-problem    4
+   :echo-request   128
+   :echo-reply     129
+   :nd-rs          133
+   :nd-ra          134
+   :nd-ns          135
+   :nd-na          136
+   :redirect       137})
+
+(def icmpv6-dest-unreach-code-map
+  {:no-route-to-destination        0
+   :administratively-prohibited    1
+   :beyond-scope-of-source-address 2
+   :address-unreachable            3
+   :port-unreachable               4
+   :source-address-failed-policy   5
+   :reject-route-to-destination    6})
+
+(def icmpv6-time-exceeded-code-map
+  {:hop-limit-exceeded-in-transit     0
+   :fragment-reassembly-time-exceeded 1})
+
+(def icmpv6-param-problem-code-map
+  {:erroneous-header-field-encountered         0
+   :unrecognized-next-header-type-encountered  1
+   :unrecognized-ipv6-option-encountered       2
+   :first-fragment-has-incomplete-header-chain 3})
+
+(def st-icmpv6
   (st/keys
    :type st/uint8
    :code st/uint8
