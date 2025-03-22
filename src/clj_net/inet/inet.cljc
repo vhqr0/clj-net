@@ -191,3 +191,47 @@
            (case type
              0 (st/bytes-fixed 0)
              st-ipv6-option-data))))
+
+;;; icmpv4
+
+;; RFC 792
+
+(def icmpv4-type-map
+  {:echo-reply           0
+   :echo-request         8
+   :dest-unreach         3
+   :source-quench        4
+   :redirect             5
+   :time-exceeded       11
+   :parameter-problem   12
+   :timestamp-request   13
+   :timestamp-reply     14
+   :information-request 15
+   :information-reply   16})
+
+(def icmpv4-redirect-code-map
+  {:network-redirect     0
+   :host-redirect        1
+   :tos-network-redirect 2
+   :tos-host-redirect    3})
+
+(def icmpv4-dest-unreach-code-map
+  {:network-unreachable  0
+   :host-unreachable     1
+   :protocol-unreachable 2
+   :port-unreachable     3
+   :fragmentation-needed 4
+   :source-route-failed  5})
+
+(def icmpv4-time-exceeded-code-map
+  {:ttl-zero-during-transit    0
+   :ttl-zero-during-reassembly 1})
+
+(def icmpv4-parameter-problem-code-map
+  {:ip-header-bad 0})
+
+(def st-icmpv4
+  (st/keys
+   :type st/uint8
+   :code st/uint8
+   :chksum st/uint16-be))
