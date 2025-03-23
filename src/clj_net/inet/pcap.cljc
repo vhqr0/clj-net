@@ -1,5 +1,6 @@
 (ns clj-net.inet.pcap
-  (:require [clj-bytes.struct :as st]))
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]))
 
 (def pcap-be-ms-magic 0xa1b2c3d4)
 (def pcap-le-ms-magic 0xd4c3b2a1)
@@ -33,12 +34,63 @@
 (defn st-pcap-packet
   [be?]
   (let [st-uint32 (if be? st/uint32-be st/uint32-le)]
-    (st/keys
-     :sec st-uint32
-     :usec st-uint32
-     :caplen st-uint32
-     :wirelen st-uint32
-     :data st/bytes)))
+    (st/key-fns
+     :sec (constantly st-uint32)
+     :usec (constantly st-uint32)
+     :caplen (constantly st-uint32)
+     :wirelen (constantly st-uint32)
+     :data #(st/bytes-var (:snaplen %)))))
 
 (def st-pcap-be-packet (st-pcap-packet true))
 (def st-pcap-le-packet (st-pcap-packet false))
+
+(defn ->pcap-read-state
+  []
+  {:stage :wait-magic :buffer (b/empty)})
+
+(defmulti advance-pcap-read-state
+  (fn [state] (:stage state)))
+
+(defmethod advance-pcap-read-state :wait-magic [state]
+  (let [{:keys [buffer]} state]
+    (if-let [[magic buffer] (-> buffer (st/unpack st-pcap-magic))]
+      (-> state
+          (assoc :stage :wait-header :magic magic :buffer buffer)
+          advance-pcap-read-state)
+      [nil state])))
+
+(defmethod advance-pcap-read-state :wait-header [state]
+  (let [{:keys [magic buffer]} state
+        st-header (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-header st-pcap-le-header)]
+    (if-let [[header buffer] (-> buffer (st/unpack st-header))]
+      (let [[s state] (-> state
+                          (assoc :stage :wait-packet :header header :buffer buffer)
+                          advance-pcap-read-state)]
+        [(cons header s) state])
+      [nil state])))
+
+(defmethod advance-pcap-read-state :wait-packet [state]
+  (let [{:keys [magic buffer]} state
+        st-packet (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-packet st-pcap-le-packet)]
+    (if-let [[packet buffer] (-> buffer (st/unpack st-packet))]
+      (let [[s state] (-> state
+                          (assoc :buffer buffer)
+                          (advance-pcap-read-state))]
+        [(cons packet s) state])
+      [nil state])))
+
+(defn ->pcap-read-xf
+  []
+  (let [vstate (volatile! (->pcap-read-state))]
+    (fn [rf]
+      (fn
+        ([] (rf))
+        ([result]
+         (let [{:keys [stage buffer]} @vstate]
+           (assert (and (= stage :wait-packet) (b/empty? buffer)))
+           (rf result)))
+        ([result input]
+         (vswap! vstate update :buffer b/concat! input)
+         (let [[s state] (advance-pcap-read-state @vstate)]
+           (vreset! vstate state)
+           (-> s (reduce rf result))))))))
