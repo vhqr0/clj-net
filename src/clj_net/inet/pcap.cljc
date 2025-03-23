@@ -93,4 +93,32 @@
          (vswap! vstate update :buffer b/concat! input)
          (let [[s state] (advance-pcap-read-state @vstate)]
            (vreset! vstate state)
-           (-> s (reduce rf result))))))))
+           (->> s (reduce rf result))))))))
+
+(defn ->pcap-write-xf
+  [opts]
+  (let [{:keys [magic vermaj vermin tz sig snaplen linktype]
+         :or {magic :be-ms vermaj 2 vermin 4 tz 0 sig 0 snaplen 4096 linktype 1}}
+        opts
+        st-header (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-header st-pcap-le-header)
+        st-packet (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-packet st-pcap-le-packet)
+        header (b/concat!
+                (-> magic (st/pack st-pcap-magic))
+                (-> {:vermaj vermaj :vermin vermin :tz tz :sig sig :snaplen snaplen :linktype linktype} (st/pack st-header)))
+        vinit? (volatile! false)]
+    (fn [rf]
+      (fn
+        ([] (rf))
+        ([result]
+         (if @vinit?
+           (rf result)
+           (do
+             (vreset! vinit? true)
+             (-> result (rf header) unreduced rf))))
+        ([result input]
+         (let [packet (-> input (st/pack st-packet))]
+           (if @vinit?
+             (rf result packet)
+             (do
+               (vreset! vinit? true)
+               (->> [header packet] (reduce rf result))))))))))
