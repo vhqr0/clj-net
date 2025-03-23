@@ -4,7 +4,7 @@
             [clj-net.inet.dns :as dns]))
 
 ;; RFC 2131 DHCPv4
-;; RFC 2132 DHCPv4 option
+;; RFC 2132 DHCPv4 options
 
 (def dhcpv4-op->int
   {:boot-request 1 :boot-reply 2})
