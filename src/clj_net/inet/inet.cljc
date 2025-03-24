@@ -497,6 +497,73 @@
    :res st/uint16-be
    :mtu st/uint32-be))
 
+(defmethod parse :icmpv6 [_type {:icmpv6/keys [type-map] :as opts} context buffer]
+  (when-let [[{:keys [type code] :as st} buffer] (-> buffer (st/unpack st-icmpv6))]
+    (let [type (get-in type-map [:i->k type] type)
+          context (merge context #:icmpv4{:type type :code code})
+          [next context] (parse-next type opts context buffer)
+          packet (cond-> {:type :icmpv6 :st st :code code}
+                   (keyword? type) (assoc :next-type type)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defn parse-icmpv6-echo
+  [type context buffer]
+  (when-let [[{:keys [seq id] :as st} buffer] (-> buffer (st/unpack st-icmpv4-echo))]
+    (let [context (merge context #:icmpv4{:seq seq :id id})
+          [next context] (parse-raw context buffer)
+          packet (cond-> {:type type :st st :id id :seq seq}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-echo-request [type _opts context buffer]
+  (parse-icmpv6-echo type context buffer))
+
+(defmethod parse :icmpv6-echo-reply [type _opts context buffer]
+  (parse-icmpv6-echo type context buffer))
+
+(defmethod parse :icmpv6-packet-too-big [_type _opts context buffer]
+  (when-let [[{:keys [mtu] :as st} buffer] (-> buffer (st/unpack st-icmpv6-packet-too-big))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-packet-too-big :st st :mtu mtu}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-nd-rs [_type _opts context buffer]
+  (when-let [[st buffer] (-> buffer (st/unpack st-icmpv6-nd-rs))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-nd-rs :st st}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-nd-ra [_type _opts context buffer]
+  (when-let [[st buffer] (-> buffer (st/unpack st-icmpv6-nd-ra))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-nd-ra :st st}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-nd-ns [_type _opts context buffer]
+  (when-let [[{:keys [tgt] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-ns))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-nd-ns :st st :tgt tgt}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-nd-na [_type _opts context buffer]
+  (when-let [[{:keys [tgt] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-na))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-nd-na :st st :tgt tgt}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv6-nd-redirect [_type _opts context buffer]
+  (when-let [[{:keys [tgt dst] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-redirect))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv6-nd-redirect :st st :tgt tgt :dst dst}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
 ;;; udp
 
 ;; RFC 768
