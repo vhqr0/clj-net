@@ -583,6 +583,18 @@
    :len st/uint16-be
    :chksum st/uint16-be))
 
+(defmethod parse :udp [_type {:udp/keys [port-map] :as opts} context buffer]
+  (when-let [[{:keys [sport dport len]} buffer] (-> buffer (st/unpack st-udp))]
+    (let [plen (- len 8)
+          proto (or (get-in port-map [:i->k dport]) (get-in port-map [:i->k sport]))
+          context (merge context #:udp{:sport sport :dport dport :proto proto :plen plen})
+          [next context trail-buffer] (parse-next proto opts context buffer plen)
+          packet (cond-> {:type :udp :sport sport :dport dport :plen plen}
+                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
+                   (keyword? proto) (assoc :next-type proto)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
 ;;; tcp
 
 ;; RFC 9293 TCP
