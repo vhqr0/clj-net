@@ -15,20 +15,28 @@
 (defmethod parse :default [_type _opts context buffer]
   (parse-raw context buffer))
 
-(defn try-parse
+(defn parse-type-or-raw
   [type opts context buffer]
   (let [[parse-res ex] (try-catch #(parse type opts context buffer))]
     (if (and (nil? ex) (some? parse-res))
       parse-res
       (parse-raw context buffer))))
 
-(defn try-parse-next
-  [type opts context buffer]
-  (if (b/empty? buffer)
-    [nil context]
-    (if-not (keyword? type)
-      (parse-raw context buffer)
-      (try-parse type opts context buffer))))
+(defn parse-next
+  ([type opts context buffer]
+   (if (b/empty? buffer)
+     [nil context]
+     (if-not (keyword? type)
+       (parse-raw context buffer)
+       (parse-type-or-raw type opts context buffer))))
+  ([type opts context buffer plen]
+   (let [[buffer trail-buffer] (if (<= (b/count buffer) plen)
+                                 [buffer nil]
+                                 (b/split-at! plen buffer))
+         [next context] (if-not (= (b/count buffer) plen)
+                          (parse-raw context buffer)
+                          (parse-next type opts context buffer))]
+     [next context trail-buffer])))
 
 ;;; ether
 
@@ -47,7 +55,7 @@
   (when-let [[{:keys [dst src type] :as st} buffer] (-> buffer (st/unpack st-ether))]
     (let [type (get-in type-map [:i->k type] type)
           context (merge context #:ether{:type type :dst dst :src src})
-          [next context] (try-parse-next type opts context buffer)
+          [next context] (parse-next type opts context buffer)
           packet (cond-> {:type :ether :st st :src src :dst dst}
                    (keyword? type) (assoc :next-type type)
                    (some? next) (assoc :next-packet next))]
@@ -102,14 +110,14 @@
 
 (def ip-proto-map
   (st/->kimap
-   {:ipv6-no-next   59
-    :ipv6-fragment  44
-    :ipv6-hbh-opts   0
-    :ipv6-dest-opts 60
-    :icmpv4          1
-    :icmpv6         58
-    :tcp             6
-    :udp            17}))
+   {:ipv6-no-next       59
+    :ipv6-ext-fragment  44
+    :ipv6-ext-hbh-opts   0
+    :ipv6-ext-dest-opts 60
+    :icmpv4              1
+    :icmpv6             58
+    :tcp                 6
+    :udp                17}))
 
 (defn sum
   "Get inet sum."
@@ -173,18 +181,13 @@
                  st/bytes-var)))))
 
 (defmethod parse :ipv4 [_type {:ip/keys [proto-map] :as opts} context buffer]
-  (when-let [[{:keys [proto src dst ihl len] :as st} buffer]
+  (when-let [[{:keys [proto src dst ihl plen] :as st} buffer]
              (-> buffer (st/unpack st-ipv4))]
-    (let [len (- len (* 5 ihl))
+    (let [plen (- plen (* 5 ihl))
           proto (get-in proto-map [:i->k proto] proto)
-          context (merge context #:ip{:version 6 :proto proto :src src :dst dst :len len})
-          [buffer trail-buffer] (if (<= (b/count buffer) len)
-                                  [buffer nil]
-                                  (b/split-at! len buffer))
-          [next context] (if-not (= (b/count buffer) len)
-                           (parse-raw context buffer)
-                           (try-parse-next proto opts context buffer))
-          packet (cond-> {:type :ipv4 :st st :src src :dst dst :len len}
+          context (merge context #:ip{:version 4 :proto proto :src src :dst dst :plen plen})
+          [next context trail-buffer] (parse-next proto opts context buffer plen)
+          packet (cond-> {:type :ipv4 :st st :src src :dst dst :plen plen}
                    (some? trail-buffer) (assoc :trail-buffer trail-buffer)
                    (keyword? proto) (assoc :next-type proto)
                    (some? next) (assoc :next-packet next))]
@@ -216,7 +219,7 @@
               #(+ 6 (* 8 %)))
              st/bytes-var)))
 
-(def st-ipv6-ext-frag
+(def st-ipv6-ext-fragment
   (-> (st/keys
        :nh st/uint8
        :res1 st/uint8
@@ -235,6 +238,42 @@
            (case type
              0 (st/bytes-fixed 0)
              (st/bytes-var st/uint8)))))
+
+(defmethod parse :ipv6 [_type {:ip/keys [proto-map] :as opts} context buffer]
+  (when-let [[{:keys [nh src dst plen] :as st} buffer]
+             (-> buffer (st/unpack st-ipv4))]
+    (let [proto (get-in proto-map [:i->k nh] nh)
+          context (merge context #:ip{:version 6 :proto proto :src src :dst dst :plen plen})
+          [next context trail-buffer] (parse-next proto opts context buffer plen)
+          packet (cond-> {:type :ipv6 :st st :src src :dst dst :plen plen}
+                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
+                   (keyword? proto) (assoc :next-type proto)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defn parse-ipv6-ext [type {:ip/keys [proto-map] :as opts} context buffer]
+  (when-let [[{:keys [nh] :as st} buffer] (-> buffer (st/unpack st-ipv6-ext))]
+    (let [proto (get-in proto-map [:i->k nh] nh)
+          [next context] (parse-next proto opts context buffer)
+          packet (cond-> {:type type :st st}
+                   (keyword? proto) (assoc :next-type proto)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :ipv6-ext-hbh-opts [type opts context buffer]
+  (parse-ipv6-ext type opts context buffer))
+
+(defmethod parse :ipv6-ext-dest-opts [type opts context buffer]
+  (parse-ipv6-ext type opts context buffer))
+
+(defmethod parse :ipv6-ext-fragment [_type {:ip/keys [proto-map]} context buffer]
+  (when-let [[{:keys [nh] :as st} buffer] (-> buffer (st/unpack st-ipv6-ext-fragment))]
+    (let [proto (get-in proto-map [:i->k nh] nh)
+          [next context] (parse-raw context buffer)
+          packet (cond-> {:type :ipv6-ext-fragment :st st}
+                   (keyword? proto) (assoc :next-type proto)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
 
 ;;; icmpv4
 
@@ -466,13 +505,14 @@
        :seq (constantly st/uint32-be)
        :ack (constantly st/uint32-be)
        :dtaofs-reserved (constantly (st/bits [4 4]))
-       :flags (constantly st/uint8)
+       :cwr-ece-urg-ack-psh-rst-syn-fin (constantly (st/bits [1 1 1 1 1 1 1 1]))
        :window (constantly st/uint16-be)
        :chksum (constantly st/uint16-be)
        :urgptr (constantly st/uint16-be)
        :options #(st/bytes-fixed (* 4 (- (:dataofs %) 5))))
       (st/wrap-vec-destructs
-       {:dataofs-reserved [:dataofs :reserved]})))
+       {:dataofs-reserved [:dataofs :reserved]
+        :cwr-ece-urg-ack-psh-rst-syn-fin [:cwr :ece :urg :ack :psh :rst :syn :fin]})))
 
 (def st-tcp-option
   (st/key-fns
