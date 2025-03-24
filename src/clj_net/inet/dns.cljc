@@ -94,25 +94,26 @@
        {:qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :ac :rcode]})))
 
 (def dns-rr-type-map
-  {:a      1
-   :ns     2
-   :md     3
-   :mf     4
-   :cname  5
-   :soa    6
-   :mb     7
-   :mg     8
-   :mr     9
-   :null  10
-   :wks   11
-   :ptr   12
-   :hinfo 13
-   :minfo 14
-   :mx    15
-   :txt   16})
+  (st/->kimap
+   {:a      1
+    :ns     2
+    :md     3
+    :mf     4
+    :cname  5
+    :soa    6
+    :mb     7
+    :mg     8
+    :mr     9
+    :null  10
+    :wks   11
+    :ptr   12
+    :hinfo 13
+    :minfo 14
+    :mx    15
+    :txt   16}))
 
 (def dns-rr-class-map
-  {:in 1})
+  (st/->kimap {:in 1}))
 
 (def st-dns-rr-cname
   st-dns-name)

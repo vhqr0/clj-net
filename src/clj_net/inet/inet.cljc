@@ -1,14 +1,41 @@
 (ns clj-net.inet.inet
-  (:require [clj-bytes.core :as b]
+  (:require [clj-lang-extra.core :refer [try-catch]]
+            [clj-bytes.core :as b]
             [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]))
+
+(defmulti parse
+  "Parse packet of type, return parsed packet and new context, or nil if parse failed."
+  (fn [type _opts _context _buffer] type))
+
+(defn parse-raw
+  [context buffer]
+  [{:type :raw :buffer buffer} context])
+
+(defmethod parse :default [_type _opts context buffer]
+  (parse-raw context buffer))
+
+(defn try-parse
+  [type opts context buffer]
+  (let [[parse-res ex] (try-catch #(parse type opts context buffer))]
+    (if (and (nil? ex) (some? parse-res))
+      parse-res
+      (parse-raw context buffer))))
+
+(defn try-parse-next
+  [type opts context buffer]
+  (if (b/empty? buffer)
+    [nil context]
+    (if-not (keyword? type)
+      (parse-raw context buffer)
+      (try-parse type opts context buffer))))
 
 ;;; ether
 
 ;; RFC 1042
 
 (def ether-type-map
-  {:arp 0x0806 :ipv4 0x0800 :ipv6 0x86dd})
+  (st/->kimap {:arp 0x0806 :ipv4 0x0800 :ipv6 0x86dd}))
 
 (def st-ether
   (st/keys
@@ -16,27 +43,37 @@
    :src ia/st-mac
    :type st/uint16-be))
 
+(defmethod parse :ether [_type {:ether/keys [type-map] :as opts} context buffer]
+  (when-let [[{:keys [dst src type] :as st} buffer] (-> buffer (st/unpack st-ether))]
+    (let [type (get-in type-map [:i->k type] type)
+          context (merge context #:ether{:type type :dst dst :src src})
+          [next context] (try-parse-next type opts context buffer)
+          packet (cond-> {:type :ether :st st :src src :dst dst}
+                   (keyword? type) (assoc :next-type type)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
 ;;; arp
 
 ;; RFC 826
 
-(def arp-hwtype->int
-  {:ether 1})
+(def arp-hwtype-map
+  (st/->kimap {:ether 1}))
 
 (def st-arp-hwtype
-  (st/enum st/uint16-be arp-hwtype->int))
+  (st/enum st/uint16-be arp-hwtype-map))
 
-(def arp-ptype->int
-  {:ipv4 0x0800})
+(def arp-ptype-map
+  (st/->kimap {:ipv4 0x0800}))
 
 (def st-arp-ptype
-  (st/enum st/uint16-be arp-ptype->int))
+  (st/enum st/uint16-be arp-ptype-map))
 
-(def arp-op->int
-  {:request 1 :reply 2})
+(def arp-op-map
+  (st/->kimap {:request 1 :reply 2}))
 
 (def st-arp-op
-  (st/enum st/uint16-be arp-op->int))
+  (st/enum st/uint16-be arp-op-map))
 
 (def st-arp
   (st/keys
@@ -50,17 +87,29 @@
    :hwdst ia/st-mac
    :pdst ia/st-ipv4))
 
+(defmethod parse :arp [_type _opts context buffer]
+  (when-let [[{:keys [op hwsrc psrc hwdst pdst] :as st} buffer]
+             (-> buffer (st/unpack st-arp))]
+    (let [context (merge context #:arp{:op op})
+          [next context] (if (b/empty? buffer)
+                           [nil context]
+                           (parse-raw context buffer))
+          packet (cond-> {:type :arp :st st :op op :src [hwsrc psrc] :dst [hwdst pdst]}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
 ;;; ip common
 
 (def ip-proto-map
-  {:nonxt     59
-   :frag      44
-   :hbh-opts   0
-   :dest-opts 60
-   :icmpv4     1
-   :icmpv6    58
-   :tcp        6
-   :udp       17})
+  (st/->kimap
+   {:ipv6-no-next   59
+    :ipv6-fragment  44
+    :ipv6-hbh-opts   0
+    :ipv6-dest-opts 60
+    :icmpv4          1
+    :icmpv6         58
+    :tcp             6
+    :udp            17}))
 
 (defn sum
   "Get inet sum."
@@ -82,6 +131,13 @@
   [b]
   (bit-and (- (inc (sum b))) 0xffff))
 
+(defmethod parse :ip [_type opts context buffer]
+  (when-not (b/empty? buffer)
+    (let [version (-> (b/uget buffer 0) (bit-shift-right 4))]
+      (case version
+        4 (parse :ipv4 opts context buffer)
+        6 (parse :ipv6 opts context buffer)))))
+
 ;;; ipv4
 
 ;; RFC 791
@@ -92,7 +148,7 @@
        :tos (constantly st/uint8)
        :len (constantly st/uint16-be)
        :id (constantly st/uint16-be)
-       :flags-frag (constantly (st/bits [3 13]))
+       :res-df-mf-frag (constantly (st/bits [1 1 1 13]))
        :ttl (constantly st/uint8)
        :proto (constantly st/uint8)
        :chksum (constantly st/uint8)
@@ -101,10 +157,10 @@
        :options #(st/bytes-fixed (* 4 (- (:ihl %) 5))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
-        :flags-frag [:flags :frag]})))
+        :res-df-mf-frag [:res :df :mf :frag]})))
 
 (def ipv4-option-map
-  {:eol 0 :nop 1})
+  (st/->kimap {:eol 0 :nop 1}))
 
 (def st-ipv4-option
   (st/key-fns
@@ -115,6 +171,24 @@
              (-> st/uint8
                  (st/wrap #(+ % 2) #(- % 2))
                  st/bytes-var)))))
+
+(defmethod parse :ipv4 [_type {:ip/keys [proto-map] :as opts} context buffer]
+  (when-let [[{:keys [proto src dst ihl len] :as st} buffer]
+             (-> buffer (st/unpack st-ipv4))]
+    (let [len (- len (* 5 ihl))
+          proto (get-in proto-map [:i->k proto] proto)
+          context (merge context #:ip{:version 6 :proto proto :src src :dst dst :len len})
+          [buffer trail-buffer] (if (<= (b/count buffer) len)
+                                  [buffer nil]
+                                  (b/split-at! len buffer))
+          [next context] (if-not (= (b/count buffer) len)
+                           (parse-raw context buffer)
+                           (try-parse-next proto opts context buffer))
+          packet (cond-> {:type :ipv4 :st st :src src :dst dst :len len}
+                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
+                   (keyword? proto) (assoc :next-type proto)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
 
 ;;; ipv6
 
@@ -152,7 +226,7 @@
        {:offset-res2-m [:offset :res2 :m]})))
 
 (def ipv6-option-map
-  {:pad1 0 :padn 1})
+  (st/->kimap {:pad1 0 :padn 1}))
 
 (def st-ipv6-option
   (st/key-fns
@@ -167,38 +241,42 @@
 ;; RFC 792
 
 (def icmpv4-type-map
-  {:echo-reply           0
-   :echo-request         8
-   :dest-unreach         3
-   :source-quench        4
-   :redirect             5
-   :time-exceeded       11
-   :param-problem       12
-   :timestamp-request   13
-   :timestamp-reply     14
-   :information-request 15
-   :information-reply   16})
+  (st/->kimap
+   {:echo-reply           0
+    :echo-request         8
+    :dest-unreach         3
+    :source-quench        4
+    :redirect             5
+    :time-exceeded       11
+    :param-problem       12
+    :timestamp-request   13
+    :timestamp-reply     14
+    :information-request 15
+    :information-reply   16}))
 
 (def icmpv4-redirect-code-map
-  {:network-redirect     0
-   :host-redirect        1
-   :tos-network-redirect 2
-   :tos-host-redirect    3})
+  (st/->kimap
+   {:network-redirect     0
+    :host-redirect        1
+    :tos-network-redirect 2
+    :tos-host-redirect    3}))
 
 (def icmpv4-dest-unreach-code-map
-  {:network-unreachable  0
-   :host-unreachable     1
-   :protocol-unreachable 2
-   :port-unreachable     3
-   :fragmentation-needed 4
-   :source-route-failed  5})
+  (st/->kimap
+   {:network-unreachable  0
+    :host-unreachable     1
+    :protocol-unreachable 2
+    :port-unreachable     3
+    :fragmentation-needed 4
+    :source-route-failed  5}))
 
 (def icmpv4-time-exceeded-code-map
-  {:ttl-zero-during-transit    0
-   :ttl-zero-during-reassembly 1})
+  (st/->kimap
+   {:ttl-zero-during-transit    0
+    :ttl-zero-during-reassembly 1}))
 
 (def icmpv4-param-problem-code-map
-  {:ip-header-bad 0})
+  (st/->kimap {:ip-header-bad 0}))
 
 (def st-icmpv4
   (st/keys
@@ -225,36 +303,40 @@
 ;; RFC 4861 NDP
 
 (def icmpv6-type-map
-  {:dest-unreach     1
-   :packet-too-big   2
-   :time-exceeded    3
-   :param-problem    4
-   :echo-request   128
-   :echo-reply     129
-   :nd-rs          133
-   :nd-ra          134
-   :nd-ns          135
-   :nd-na          136
-   :nd-redirect    137})
+  (st/->kimap
+   {:dest-unreach     1
+    :packet-too-big   2
+    :time-exceeded    3
+    :param-problem    4
+    :echo-request   128
+    :echo-reply     129
+    :nd-rs          133
+    :nd-ra          134
+    :nd-ns          135
+    :nd-na          136
+    :nd-redirect    137}))
 
 (def icmpv6-dest-unreach-code-map
-  {:no-route-to-destination        0
-   :administratively-prohibited    1
-   :beyond-scope-of-source-address 2
-   :address-unreachable            3
-   :port-unreachable               4
-   :source-address-failed-policy   5
-   :reject-route-to-destination    6})
+  (st/->kimap
+   {:no-route-to-destination        0
+    :administratively-prohibited    1
+    :beyond-scope-of-source-address 2
+    :address-unreachable            3
+    :port-unreachable               4
+    :source-address-failed-policy   5
+    :reject-route-to-destination    6}))
 
 (def icmpv6-time-exceeded-code-map
-  {:hop-limit-exceeded-in-transit     0
-   :fragment-reassembly-time-exceeded 1})
+  (st/->kimap
+   {:hop-limit-exceeded-in-transit     0
+    :fragment-reassembly-time-exceeded 1}))
 
 (def icmpv6-param-problem-code-map
-  {:erroneous-header-field-encountered         0
-   :unrecognized-next-header-type-encountered  1
-   :unrecognized-ipv6-option-encountered       2
-   :first-fragment-has-incomplete-header-chain 3})
+  (st/->kimap
+   {:erroneous-header-field-encountered         0
+    :unrecognized-next-header-type-encountered  1
+    :unrecognized-ipv6-option-encountered       2
+    :first-fragment-has-incomplete-header-chain 3}))
 
 (def st-icmpv6
   (st/keys
@@ -313,11 +395,12 @@
    :options st/bytes))
 
 (def icmpv6-nd-option-map
-  {:src-lladdr   1
-   :dst-lladdr   2
-   :prefix-info  3
-   :redirect-hdr 4
-   :mtu          5})
+  (st/->kimap
+   {:src-lladdr   1
+    :dst-lladdr   2
+    :prefix-info  3
+    :redirect-hdr 4
+    :mtu          5}))
 
 (def st-icmpv6-nd-option
   (st/keys
@@ -356,11 +439,12 @@
 ;; RFC 768
 
 (def udp-port-map
-  {:dns            53
-   :dhcpv4-client  67
-   :dhcpv6-sever   68
-   :dhcpv6-client 546
-   :dhcpv6-server 547})
+  (st/->kimap
+   {:dns            53
+    :dhcpv4-client  67
+    :dhcpv6-sever   68
+    :dhcpv6-client 546
+    :dhcpv6-server 547}))
 
 (def st-udp
   (st/keys
@@ -401,7 +485,7 @@
                  st/bytes-var)))))
 
 (def tcp-option-map
-  {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6})
+  (st/->kimap {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6}))
 
 (def tcp-option-mss
   st/uint16-be)

@@ -8,10 +8,11 @@
 (def pcap-le-ns-magic 0x4d3cb2a1)
 
 (def pcap-magic-map
-  {:be-ms pcap-be-ms-magic
-   :le-ms pcap-le-ms-magic
-   :be-ns pcap-be-ns-magic
-   :le-ns pcap-le-ns-magic})
+  (st/->kimap
+   {:be-ms pcap-be-ms-magic
+    :le-ms pcap-le-ms-magic
+    :be-ns pcap-be-ns-magic
+    :le-ns pcap-le-ns-magic}))
 
 (def st-pcap-magic
   (st/enum st/uint32-be pcap-magic-map))
