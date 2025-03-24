@@ -281,17 +281,17 @@
 
 (def icmpv4-type-map
   (st/->kimap
-   {:echo-reply           0
-    :echo-request         8
-    :dest-unreach         3
-    :source-quench        4
-    :redirect             5
-    :time-exceeded       11
-    :param-problem       12
-    :timestamp-request   13
-    :timestamp-reply     14
-    :information-request 15
-    :information-reply   16}))
+   {:icmpv4-echo-reply           0
+    :icmpv4-echo-request         8
+    :icmpv4-dest-unreach         3
+    :icmpv4-source-quench        4
+    :icmpv4-redirect             5
+    :icmpv4-time-exceeded       11
+    :icmpv4-param-problem       12
+    :icmpv4-timestamp-request   13
+    :icmpv4-timestamp-reply     14
+    :icmpv4-information-request 15
+    :icmpv4-information-reply   16}))
 
 (def icmpv4-redirect-code-map
   (st/->kimap
@@ -323,10 +323,6 @@
    :code st/uint8
    :chksum st/uint16-be))
 
-(def st-icmpv4-unused
-  (st/keys
-   :unused st/uint32-be))
-
 (def st-icmpv4-echo
   (st/keys
    :id st/uint16-be
@@ -336,6 +332,38 @@
   (st/keys
    :gw ia/st-ipv4))
 
+(defmethod parse :icmpv4 [_type {:icmpv4/keys [type-map] :as opts} context buffer]
+  (when-let [[{:keys [type code] :as st} buffer] (-> buffer (st/unpack st-icmpv4))]
+    (let [type (get-in type-map [:i->k type] type)
+          context (merge context #:icmpv4{:type type :code code})
+          [next context] (parse-next type opts context buffer)
+          packet (cond-> {:type :icmpv4 :st st :code code}
+                   (keyword? type) (assoc :next-type type)
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defn parse-icmpv4-echo
+  [type context buffer]
+  (when-let [[{:keys [seq id] :as st} buffer] (-> buffer (st/unpack st-icmpv4-echo))]
+    (let [context (merge context #:icmpv4{:seq seq :id id})
+          [next context] (parse-raw context buffer)
+          packet (cond-> {:type type :st st :id id :seq seq}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
+(defmethod parse :icmpv4-echo-request [type _opts context buffer]
+  (parse-icmpv4-echo type context buffer))
+
+(defmethod parse :icmpv4-echo-reply [type _opts context buffer]
+  (parse-icmpv4-echo type context buffer))
+
+(defmethod parse :icmpv4-redirect [_type _opts context buffer]
+  (when-let [[{:keys [gw] :as st} buffer] (-> buffer (st/unpack st-icmpv4-redirect))]
+    (let [[next context] (parse-raw context buffer)
+          packet (cond-> {:type :icmpv4-redirect :st st :gw gw}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
+
 ;;; icmpv6
 
 ;; RFC 4443 ICMPv6
@@ -343,17 +371,17 @@
 
 (def icmpv6-type-map
   (st/->kimap
-   {:dest-unreach     1
-    :packet-too-big   2
-    :time-exceeded    3
-    :param-problem    4
-    :echo-request   128
-    :echo-reply     129
-    :nd-rs          133
-    :nd-ra          134
-    :nd-ns          135
-    :nd-na          136
-    :nd-redirect    137}))
+   {:icmpv6-dest-unreach     1
+    :icmpv6-packet-too-big   2
+    :icmpv6-time-exceeded    3
+    :icmpv6-param-problem    4
+    :icmpv6-echo-request   128
+    :icmpv6-echo-reply     129
+    :icmpv6-nd-rs          133
+    :icmpv6-nd-ra          134
+    :icmpv6-nd-ns          135
+    :icmpv6-nd-na          136
+    :icmpv6-nd-redirect    137}))
 
 (def icmpv6-dest-unreach-code-map
   (st/->kimap
@@ -382,10 +410,6 @@
    :type st/uint8
    :code st/uint8
    :chksum st/uint16-be))
-
-(def st-icmpv6-unused
-  (st/keys
-   :unused st/uint32-be))
 
 (def st-icmpv6-echo
   (st/keys
