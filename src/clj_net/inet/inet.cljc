@@ -5,38 +5,55 @@
             [clj-net.inet.addr :as ia]))
 
 (defmulti parse
-  "Parse packet of type, return parsed packet and new context, or nil if parse failed."
+  "Parse packet of type, return parsed packet
+  and new context, or nil if parse failed."
   (fn [type _opts _context _buffer] type))
 
-(defn parse-raw
-  [context buffer]
-  [{:type :raw :buffer buffer} context])
+(defn ->raw-packet
+  "Construct a raw packet."
+  [buffer]
+  {:type :raw :buffer buffer})
 
 (defmethod parse :default [_type _opts context buffer]
-  (parse-raw context buffer))
+  [(->raw-packet buffer) context])
 
-(defn parse-type-or-raw
+(defn try-parse
+  "Try to parse a packet with specified type,
+  or a raw packet to ensure a non nil parse result."
   [type opts context buffer]
   (let [[parse-res ex] (try-catch #(parse type opts context buffer))]
     (if (and (nil? ex) (some? parse-res))
       parse-res
-      (parse-raw context buffer))))
+      [(->raw-packet buffer) context])))
 
-(defn parse-next
-  ([type opts context buffer]
-   (if (b/empty? buffer)
-     [nil context]
-     (if-not (keyword? type)
-       (parse-raw context buffer)
-       (parse-type-or-raw type opts context buffer))))
-  ([type opts context buffer plen]
-   (let [[buffer trail-buffer] (if (<= (b/count buffer) plen)
-                                 [buffer nil]
-                                 (b/split-at! plen buffer))
-         [next context] (if-not (= (b/count buffer) plen)
-                          (parse-raw context buffer)
-                          (parse-next type opts context buffer))]
-     [next context trail-buffer])))
+(defn try-parse-next
+  "Try to parse the next packet and assoc in current packet."
+  ;; try to parse a packet with unknown type
+  ([packet context buffer]
+   (let [packet (cond-> packet
+                  (not (b/empty? buffer))
+                  (assoc :next-packet (->raw-packet buffer)))]
+     [packet context]))
+  ;; try to parse a packet with specified type
+  ([packet type opts context buffer]
+   (if-not (keyword? type)
+     (try-parse-next packet context buffer)
+     (let [packet (assoc packet :next-type type)]
+       (if (b/empty? buffer)
+         [packet context]
+         (let [[next-packet context] (try-parse type opts context buffer)
+               packet (assoc packet :next-packet next-packet)]
+           [packet context])))))
+  ;; try to parse a packet with specified length
+  ([packet type opts context buffer plen]
+   (let [[packet buffer] (if (<= (b/count buffer) plen)
+                           [packet buffer]
+                           (let [[buffer trail-buffer] (b/split-at! plen buffer)
+                                 packet (assoc packet :trail-buffer trail-buffer)]
+                             [packet buffer]))]
+     (if-not (= (b/count buffer) plen)
+       (try-parse-next packet context buffer)
+       (try-parse-next packet type opts context buffer)))))
 
 ;;; ether
 
@@ -53,13 +70,10 @@
 
 (defmethod parse :ether [_type {:ether/keys [type-map] :as opts} context buffer]
   (when-let [[{:keys [dst src type] :as st} buffer] (-> buffer (st/unpack st-ether))]
-    (let [type (get-in type-map [:i->k type] type)
+    (let [type (get-in type-map [:i->k type])
           context (merge context #:ether{:type type :dst dst :src src})
-          [next context] (parse-next type opts context buffer)
-          packet (cond-> {:type :ether :st st :src src :dst dst}
-                   (keyword? type) (assoc :next-type type)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :ether :st st :src src :dst dst}]
+      (try-parse-next packet type opts context buffer))))
 
 ;;; arp
 
@@ -99,12 +113,8 @@
   (when-let [[{:keys [op hwsrc psrc hwdst pdst] :as st} buffer]
              (-> buffer (st/unpack st-arp))]
     (let [context (merge context #:arp{:op op})
-          [next context] (if (b/empty? buffer)
-                           [nil context]
-                           (parse-raw context buffer))
-          packet (cond-> {:type :arp :st st :op op :src [hwsrc psrc] :dst [hwdst pdst]}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :arp :st st :op op :src [hwsrc psrc] :dst [hwdst pdst]}]
+      (try-parse-next packet context buffer))))
 
 ;;; ip common
 
@@ -184,14 +194,10 @@
   (when-let [[{:keys [proto src dst ihl plen] :as st} buffer]
              (-> buffer (st/unpack st-ipv4))]
     (let [plen (- plen (* 5 ihl))
-          proto (get-in proto-map [:i->k proto] proto)
+          proto (get-in proto-map [:i->k proto])
           context (merge context #:ip{:version 4 :proto proto :src src :dst dst :plen plen})
-          [next context trail-buffer] (parse-next proto opts context buffer plen)
-          packet (cond-> {:type :ipv4 :st st :src src :dst dst :plen plen}
-                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
-                   (keyword? proto) (assoc :next-type proto)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :ipv4 :st st :src src :dst dst :plen plen}]
+      (try-parse-next packet proto opts context buffer plen))))
 
 ;;; ipv6
 
@@ -242,23 +248,16 @@
 (defmethod parse :ipv6 [_type {:ip/keys [proto-map] :as opts} context buffer]
   (when-let [[{:keys [nh src dst plen] :as st} buffer]
              (-> buffer (st/unpack st-ipv4))]
-    (let [proto (get-in proto-map [:i->k nh] nh)
+    (let [proto (get-in proto-map [:i->k nh])
           context (merge context #:ip{:version 6 :proto proto :src src :dst dst :plen plen})
-          [next context trail-buffer] (parse-next proto opts context buffer plen)
-          packet (cond-> {:type :ipv6 :st st :src src :dst dst :plen plen}
-                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
-                   (keyword? proto) (assoc :next-type proto)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :ipv6 :st st :src src :dst dst :plen plen}]
+      (try-parse-next packet proto opts context buffer plen))))
 
 (defn parse-ipv6-ext [type {:ip/keys [proto-map] :as opts} context buffer]
   (when-let [[{:keys [nh] :as st} buffer] (-> buffer (st/unpack st-ipv6-ext))]
-    (let [proto (get-in proto-map [:i->k nh] nh)
-          [next context] (parse-next proto opts context buffer)
-          packet (cond-> {:type type :st st}
-                   (keyword? proto) (assoc :next-type proto)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [proto (get-in proto-map [:i->k nh])
+          packet {:type type :st st}]
+      (try-parse-next packet proto opts context buffer))))
 
 (defmethod parse :ipv6-ext-hbh-opts [type opts context buffer]
   (parse-ipv6-ext type opts context buffer))
@@ -266,14 +265,11 @@
 (defmethod parse :ipv6-ext-dest-opts [type opts context buffer]
   (parse-ipv6-ext type opts context buffer))
 
-(defmethod parse :ipv6-ext-fragment [_type {:ip/keys [proto-map]} context buffer]
+(defmethod parse :ipv6-ext-fragment [_type {:ip/keys [proto-map] :as opts} context buffer]
   (when-let [[{:keys [nh] :as st} buffer] (-> buffer (st/unpack st-ipv6-ext-fragment))]
-    (let [proto (get-in proto-map [:i->k nh] nh)
-          [next context] (parse-raw context buffer)
-          packet (cond-> {:type :ipv6-ext-fragment :st st}
-                   (keyword? proto) (assoc :next-type proto)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [proto (get-in proto-map [:i->k nh])
+          packet {:type :ipv6-ext-fragment :st st}]
+      (try-parse-next packet proto opts context buffer))))
 
 ;;; icmpv4
 
@@ -334,22 +330,17 @@
 
 (defmethod parse :icmpv4 [_type {:icmpv4/keys [type-map] :as opts} context buffer]
   (when-let [[{:keys [type code] :as st} buffer] (-> buffer (st/unpack st-icmpv4))]
-    (let [type (get-in type-map [:i->k type] type)
+    (let [type (get-in type-map [:i->k type])
           context (merge context #:icmpv4{:type type :code code})
-          [next context] (parse-next type opts context buffer)
-          packet (cond-> {:type :icmpv4 :st st :code code}
-                   (keyword? type) (assoc :next-type type)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :icmpv4 :st st :code code}]
+      (try-parse-next packet type opts context buffer))))
 
 (defn parse-icmpv4-echo
   [type context buffer]
   (when-let [[{:keys [seq id] :as st} buffer] (-> buffer (st/unpack st-icmpv4-echo))]
     (let [context (merge context #:icmpv4{:seq seq :id id})
-          [next context] (parse-raw context buffer)
-          packet (cond-> {:type type :st st :id id :seq seq}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type type :st st :id id :seq seq}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv4-echo-request [type _opts context buffer]
   (parse-icmpv4-echo type context buffer))
@@ -359,10 +350,8 @@
 
 (defmethod parse :icmpv4-redirect [_type _opts context buffer]
   (when-let [[{:keys [gw] :as st} buffer] (-> buffer (st/unpack st-icmpv4-redirect))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv4-redirect :st st :gw gw}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv4-redirect :st st :gw gw}]
+      (try-parse-next packet context buffer))))
 
 ;;; icmpv6
 
@@ -499,22 +488,17 @@
 
 (defmethod parse :icmpv6 [_type {:icmpv6/keys [type-map] :as opts} context buffer]
   (when-let [[{:keys [type code] :as st} buffer] (-> buffer (st/unpack st-icmpv6))]
-    (let [type (get-in type-map [:i->k type] type)
+    (let [type (get-in type-map [:i->k type])
           context (merge context #:icmpv4{:type type :code code})
-          [next context] (parse-next type opts context buffer)
-          packet (cond-> {:type :icmpv6 :st st :code code}
-                   (keyword? type) (assoc :next-type type)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :icmpv6 :st st :code code}]
+      (try-parse-next packet type opts context buffer))))
 
 (defn parse-icmpv6-echo
   [type context buffer]
   (when-let [[{:keys [seq id] :as st} buffer] (-> buffer (st/unpack st-icmpv4-echo))]
     (let [context (merge context #:icmpv4{:seq seq :id id})
-          [next context] (parse-raw context buffer)
-          packet (cond-> {:type type :st st :id id :seq seq}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type type :st st :id id :seq seq}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-echo-request [type _opts context buffer]
   (parse-icmpv6-echo type context buffer))
@@ -524,45 +508,33 @@
 
 (defmethod parse :icmpv6-packet-too-big [_type _opts context buffer]
   (when-let [[{:keys [mtu] :as st} buffer] (-> buffer (st/unpack st-icmpv6-packet-too-big))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-packet-too-big :st st :mtu mtu}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-packet-too-big :st st :mtu mtu}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-nd-rs [_type _opts context buffer]
   (when-let [[st buffer] (-> buffer (st/unpack st-icmpv6-nd-rs))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-nd-rs :st st}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-nd-rs :st st}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-nd-ra [_type _opts context buffer]
   (when-let [[st buffer] (-> buffer (st/unpack st-icmpv6-nd-ra))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-nd-ra :st st}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-nd-ra :st st}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-nd-ns [_type _opts context buffer]
   (when-let [[{:keys [tgt] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-ns))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-nd-ns :st st :tgt tgt}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-nd-ns :st st :tgt tgt}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-nd-na [_type _opts context buffer]
   (when-let [[{:keys [tgt] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-na))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-nd-na :st st :tgt tgt}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-nd-na :st st :tgt tgt}]
+      (try-parse-next packet context buffer))))
 
 (defmethod parse :icmpv6-nd-redirect [_type _opts context buffer]
   (when-let [[{:keys [tgt dst] :as st} buffer] (-> buffer (st/unpack st-icmpv6-nd-redirect))]
-    (let [[next context] (parse-raw context buffer)
-          packet (cond-> {:type :icmpv6-nd-redirect :st st :tgt tgt :dst dst}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+    (let [packet {:type :icmpv6-nd-redirect :st st :tgt tgt :dst dst}]
+      (try-parse-next packet context buffer))))
 
 ;;; udp
 
@@ -588,12 +560,8 @@
     (let [plen (- len 8)
           proto (or (get-in port-map [:i->k dport]) (get-in port-map [:i->k sport]))
           context (merge context #:udp{:sport sport :dport dport :proto proto :plen plen})
-          [next context trail-buffer] (parse-next proto opts context buffer plen)
-          packet (cond-> {:type :udp :sport sport :dport dport :plen plen}
-                   (some? trail-buffer) (assoc :trail-buffer trail-buffer)
-                   (keyword? proto) (assoc :next-type proto)
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :udp :sport sport :dport dport :plen plen}]
+      (try-parse-next packet proto opts context buffer plen))))
 
 ;;; tcp
 
@@ -648,7 +616,5 @@
   (when-let [[{:keys [sport dport] :as st} buffer] (-> buffer (st/unpack st-tcp))]
     (let [flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get st %))) set)
           context (merge context #:tcp{:sport sport :dport dport :flags flags})
-          [next context] (parse-raw context buffer)
-          packet (cond-> {:type :tcp :sport sport :dport dport :flags flags}
-                   (some? next) (assoc :next-packet next))]
-      [packet context])))
+          packet {:type :tcp :sport sport :dport dport :flags flags}]
+      (try-parse-next packet context buffer))))
