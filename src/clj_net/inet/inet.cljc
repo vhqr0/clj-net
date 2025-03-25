@@ -643,3 +643,12 @@
   (st/keys
    :tsval st/uint32-be
    :tsecr st/uint16-be))
+
+(defmethod parse :tcp [_type _opts context buffer]
+  (when-let [[{:keys [sport dport] :as st} buffer] (-> buffer (st/unpack st-tcp))]
+    (let [flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get st %))) set)
+          context (merge context #:tcp{:sport sport :dport dport :flags flags})
+          [next context] (parse-raw context buffer)
+          packet (cond-> {:type :tcp :sport sport :dport dport :flags flags}
+                   (some? next) (assoc :next-packet next))]
+      [packet context])))
