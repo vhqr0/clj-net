@@ -4,7 +4,8 @@
             [clj-net.inet.packet :as pkt]
             [clj-net.inet.ip :as ip]))
 
-;; RFC 8200
+;; RFC 8200 IPv6
+;; RFC 4303 IPv6 ESP
 
 (def st-ipv6
   (-> (st/keys
@@ -64,17 +65,28 @@
   (pkt/parse-simple-packet
    st-ipv6 type opts context buffer
    (fn [packet context]
-     (let [{:keys [nh src dst plen]} (:st packet)]
-       (ip/parse-ip-xform opts packet context 6 nh src dst plen)))))
+     (let [{:keys [nh fl src dst plen]} (:st packet)]
+       (ip/parse-ip-xform opts packet context 6 fl nh src dst plen)))))
+
+(defn parse-ipv6-ext
+  ([type opts context buffer]
+   (parse-ipv6-ext type opts context buffer nil))
+  ([type opts context buffer xf]
+   (pkt/parse-simple-packet
+    st-ipv6-ext type opts context buffer
+    (fn [packet context]
+      (let [[packet context] (or (when (some? xf) (xf packet context)) [packet context])
+            {:keys [nh]} (:st packet)]
+        (ip/parse-ip-ext-xform packet context nh))))))
 
 (defn parse-ipv6-ext-opts [type {:ipv6/keys [option-map] :as opts} context buffer]
-  (pkt/parse-simple-packet
-   st-ipv6-ext type opts context buffer
+  (parse-ipv6-ext
+   type opts context buffer
    (fn [packet context]
-     (let [{:keys [nh data]} (:st packet)
+     (let [{:keys [data]} (:st packet)
            options (parse-ipv6-options data option-map)
            packet (assoc packet :options options)]
-       (ip/parse-ip-ext-xform packet context nh)))))
+       [packet context]))))
 
 (defmethod pkt/parse :ipv6-ext-hbh-opts [type opts context buffer]
   (parse-ipv6-ext-opts type opts context buffer))
@@ -82,9 +94,19 @@
 (defmethod pkt/parse :ipv6-ext-dest-opts [type opts context buffer]
   (parse-ipv6-ext-opts type opts context buffer))
 
+(defmethod pkt/parse :ipv6-ext-routing [type opts context buffer]
+  (parse-ipv6-ext type opts context buffer))
+
+(defmethod pkt/parse :ipv6-ext-esp [type opts context buffer]
+  (parse-ipv6-ext type opts context buffer))
+
+(defmethod pkt/parse :ipv6-ext-ah [type opts context buffer]
+  (parse-ipv6-ext type opts context buffer))
+
 (defmethod pkt/parse :ipv6-ext-fragment [_type opts context buffer]
   (pkt/parse-simple-packet
    st-ipv6-ext-fragment type opts context buffer
    (fn [packet context]
-     (let [{:keys [nh]} (:st packet)]
+     (let [{:keys [nh offset]} (:st packet)
+           nh (when (zero? offset) nh)]
        (ip/parse-ip-ext-xform packet context nh)))))

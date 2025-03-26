@@ -53,8 +53,9 @@
   (pkt/parse-simple-packet
    st-ipv4 type opts context buffer
    (fn [packet context]
-     (let [{:keys [proto src dst ihl len options]} (:st packet)
+     (let [{:keys [proto id frag src dst ihl len options]} (:st packet)
+           proto (when (zero? frag) proto)
            packet (cond-> packet
                     (not (b/empty? options))
                     (assoc :options (parse-ipv4-options options opts)))]
-       (ip/parse-ip-xform opts packet context 4 proto src dst (- len (* 5 ihl)))))))
+       (ip/parse-ip-xform opts packet context 4 id proto src dst (- len (* 5 ihl)))))))

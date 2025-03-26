@@ -60,7 +60,7 @@
   ([st type opts context buffer xf]
    (when-let [[st buffer] (-> buffer (st/unpack st))]
      (let [packet {:type type :st st}
-           [packet context next-info] (when xf (xf packet context))
+           [packet context next-info] (or (when (some? xf) (xf packet context)) [packet context nil])
            {:keys [next-type next-length]} next-info]
        (if (nil? next-type)
          (-> packet (try-parse-next context buffer))

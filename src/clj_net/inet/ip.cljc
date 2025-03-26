@@ -26,9 +26,12 @@
 (def ip-proto-map
   (st/->kimap
    {:ipv6-no-next       59
-    :ipv6-ext-fragment  44
     :ipv6-ext-hbh-opts   0
     :ipv6-ext-dest-opts 60
+    :ipv6-ext-routing   43
+    :ipv6-ext-fragment  44
+    :ipv6-ext-esp       50
+    :ipv6-ext-ah        51
     :icmpv4              1
     :icmpv6             58
     :tcp                 6
@@ -42,13 +45,13 @@
         6 (pkt/parse :ipv6 opts context buffer)))))
 
 (defn parse-ip-xform
-  [{:ip/keys [proto-map]} packet context version proto src dst plen]
-  (let [proto (get-in proto-map [:i->k proto])
-        context (merge context #:ip{:version version :proto proto :src src :dst dst :plen plen})]
+  [{:ip/keys [proto-map]} packet context version id proto src dst plen]
+  (let [proto (when (some? proto) (get-in proto-map [:i->k proto]))
+        context (merge context #:ip{:version version :id id :proto proto :src src :dst dst :plen plen})]
     [packet context {:next-type proto :next-length plen}]))
 
 (defn parse-ip-ext-xform
   [{:ip/keys [proto-map]} packet context proto]
-  (let [proto (get-in proto-map [:i->k proto])
+  (let [proto (when (some? proto) (get-in proto-map [:i->k proto]))
         context (merge context #:ip{:proto proto})]
     [packet context {:next-type proto}]))
