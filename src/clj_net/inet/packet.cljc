@@ -67,3 +67,11 @@
          (if (nil? next-length)
            (-> packet (try-parse-next next-type opts context buffer))
            (-> packet (try-parse-next next-type opts context buffer next-length))))))))
+
+(defn parse-option
+  ([option option-map]
+   (parse-option option option-map nil))
+  ([[type data] option-map xf]
+   (let [type (get-in option-map [:i->k type] type)
+         data (or (when (and (some? xf) (keyword? type)) (xf type data)) data)]
+     [type data])))

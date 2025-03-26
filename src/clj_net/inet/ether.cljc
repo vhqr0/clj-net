@@ -19,6 +19,6 @@
    st-ether type opts context buffer
    (fn [packet context]
      (let [{:keys [dst src type]} (:st packet)
-           next-type (get-in type-map [:i->k type])
-           context (merge context #:ether{:proto next-type :src src :dst dst})]
-       [packet context {:next-type next-type}]))))
+           type (get-in type-map [:i->k type])
+           context (merge context #:ether{:type type :src src :dst dst})]
+       [packet context {:next-type type}]))))
