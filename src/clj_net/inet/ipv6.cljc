@@ -14,7 +14,7 @@
        :nh st/uint8
        :hlim st/uint8
        :src ia/st-ipv6
-       :dst ia/st-ipv4)
+       :dst ia/st-ipv6)
       (st/wrap-vec-destructs
        {:version-tc-fl [:version :tc :fl]})))
 

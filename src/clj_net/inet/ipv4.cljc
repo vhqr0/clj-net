@@ -13,7 +13,7 @@
        :tos (constantly st/uint8)
        :len (constantly st/uint16-be)
        :id (constantly st/uint16-be)
-       :res-df-mf-frag (constantly (st/bits [1 1 1 13]))
+       :res-df-mf-offset (constantly (st/bits [1 1 1 13]))
        :ttl (constantly st/uint8)
        :proto (constantly st/uint8)
        :chksum (constantly st/uint8)
@@ -22,7 +22,7 @@
        :options #(st/bytes-fixed (* 4 (- (:ihl %) 5))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
-        :res-df-mf-frag [:res :df :mf :frag]})))
+        :res-df-mf-offset [:res :df :mf :offset]})))
 
 (def ipv4-option-map
   (st/->kimap {:eol 0 :nop 1}))
@@ -53,8 +53,8 @@
   (pkt/parse-simple-packet
    st-ipv4 type opts context buffer
    (fn [packet context]
-     (let [{:keys [proto id frag src dst ihl len options]} (:st packet)
-           proto (when (zero? frag) proto)
+     (let [{:keys [proto id offset src dst ihl len options]} (:st packet)
+           proto (when (zero? offset) proto)
            packet (cond-> packet
                     (not (b/empty? options))
                     (assoc :options (parse-ipv4-options options opts)))]
