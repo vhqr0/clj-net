@@ -35,12 +35,12 @@
 (defn st-pcap-packet
   [be?]
   (let [st-uint32 (if be? st/uint32-be st/uint32-le)]
-    (st/key-fns
-     :sec (constantly st-uint32)
-     :usec (constantly st-uint32)
-     :caplen (constantly st-uint32)
-     :wirelen (constantly st-uint32)
-     :data #(st/bytes-var (:snaplen %)))))
+    (st/keys
+     :sec st-uint32
+     :usec st-uint32
+     :caplen st-uint32
+     :wirelen st-uint32
+     :data (st/lazy #(st/bytes-var (:snaplen %))))))
 
 (def st-pcap-be-packet (st-pcap-packet true))
 (def st-pcap-le-packet (st-pcap-packet false))

@@ -42,12 +42,13 @@
   (st/->kimap {:pad1 0 :padn 1}))
 
 (def st-ipv6-option
-  (st/key-fns
-   :type (constantly st/uint8)
-   :data (fn [{:keys [type]}]
-           (case type
-             0 (st/bytes-fixed 0)
-             (st/bytes-var st/uint8)))))
+  (st/keys
+   :type st/uint8
+   :data (st/lazy
+          (fn [{:keys [type]}]
+            (case type
+              0 (st/bytes-fixed 0)
+              (st/bytes-var st/uint8))))))
 
 (def st-ipv6-options
   (st/coll-of st-ipv6-option))

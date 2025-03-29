@@ -8,18 +8,18 @@
 ;; RFC 791
 
 (def st-ipv4
-  (-> (st/key-fns
-       :version-ihl (constantly (st/bits [4 4]))
-       :tos (constantly st/uint8)
-       :len (constantly st/uint16-be)
-       :id (constantly st/uint16-be)
-       :res-df-mf-offset (constantly (st/bits [1 1 1 13]))
-       :ttl (constantly st/uint8)
-       :proto (constantly st/uint8)
-       :chksum (constantly st/uint8)
-       :src (constantly ia/st-ipv4)
-       :dst (constantly ia/st-ipv4)
-       :options #(st/bytes-fixed (* 4 (- (:ihl %) 5))))
+  (-> (st/keys
+       :version-ihl (st/bits [4 4])
+       :tos st/uint8
+       :len st/uint16-be
+       :id st/uint16-be
+       :res-df-mf-offset (st/bits [1 1 1 13])
+       :ttl st/uint8
+       :proto st/uint8
+       :chksum st/uint8
+       :src ia/st-ipv4
+       :dst ia/st-ipv4
+       :options (st/lazy #(st/bytes-fixed (* 4 (- (:ihl %) 5)))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
         :res-df-mf-offset [:res :df :mf :offset]})))
@@ -28,14 +28,15 @@
   (st/->kimap {:eol 0 :nop 1}))
 
 (def st-ipv4-option
-  (st/key-fns
-   :type (constantly st/uint8)
-   :data (fn [{:keys [type]}]
-           (case type
-             (0 1) (st/bytes-fixed 0)
-             (-> st/uint8
-                 (st/wrap #(+ % 2) #(- % 2))
-                 st/bytes-var)))))
+  (st/keys
+   :type st/uint8
+   :data (st/lazy
+          (fn [{:keys [type]}]
+            (case type
+              (0 1) (st/bytes-fixed 0)
+              (-> st/uint8
+                  (st/wrap #(+ % 2) #(- % 2))
+                  st/bytes-var))))))
 
 (def st-ipv4-options
   (st/coll-of st-ipv4-option))

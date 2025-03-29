@@ -79,17 +79,17 @@
    :qclass st/uint16-be))
 
 (def st-dns
-  (-> (st/key-fns
-       :id (constantly st/uint16-be)
-       :qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode (constantly (st/bits [1 4 1 1 1 1 1 1 1 4]))
-       :qdcount (constantly st/uint16-be)
-       :ancount (constantly st/uint16-be)
-       :nscount (constantly st/uint16-be)
-       :arcount (constantly st/uint16-be)
-       :qd #(st/coll-fixed-of (:qdcount %) st-dns-qr)
-       :an #(st/coll-fixed-of (:ancount %) st-dns-rr)
-       :ns #(st/coll-fixed-of (:nscount %) st-dns-rr)
-       :ar #(st/coll-fixed-of (:arcount %) st-dns-rr))
+  (-> (st/keys
+       :id st/uint16-be
+       :qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode (st/bits [1 4 1 1 1 1 1 1 1 4])
+       :qdcount st/uint16-be
+       :ancount st/uint16-be
+       :nscount st/uint16-be
+       :arcount st/uint16-be
+       :qd (st/lazy #(st/coll-of (:qdcount %) st-dns-qr))
+       :an (st/lazy #(st/coll-of (:ancount %) st-dns-rr))
+       :ns (st/lazy #(st/coll-of (:nscount %) st-dns-rr))
+       :ar (st/lazy #(st/coll-of (:arcount %) st-dns-rr)))
       (st/wrap-vec-destructs
        {:qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :ac :rcode]})))
 

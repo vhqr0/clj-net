@@ -33,13 +33,14 @@
    :peeraddr ia/st-ipv6))
 
 (def st-dhcpv6
-  (st/key-fns
-   :msg-type (constantly st-dhcpv6-msg-type)
-   :info (fn [{:keys [msg-type]}]
-           (case msg-type
-             (12 13) st-dhcpv6-relay-info
-             (st/bytes-fixed 3)))
-   :options (constantly st/bytes)))
+  (st/keys
+   :msg-type st-dhcpv6-msg-type
+   :info (st/lazy
+          (fn [{:keys [msg-type]}]
+            (case msg-type
+              (12 13) st-dhcpv6-relay-info
+              (st/bytes-fixed 3))))
+   :options st/bytes))
 
 (def dhcpv6-duid-type-map
   (st/->kimap {:llt 1 :en 2 :ll 3 :uuid 4}))
