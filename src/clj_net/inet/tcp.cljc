@@ -61,7 +61,7 @@
 
 (defmethod parse-tcp-option :default [option] option)
 (defmethod parse-tcp-option 0 [_option] {:type :eol})
-(defmethod parse-tcp-option 1 [_option] {:type :eol})
+(defmethod parse-tcp-option 1 [_option] {:type :nop})
 
 (doseq [[k i] (:k->i tcp-option-map)]
   (when-not (contains? #{0 1} i)

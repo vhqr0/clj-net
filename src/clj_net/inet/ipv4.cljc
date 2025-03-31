@@ -42,7 +42,7 @@
 
 (defmethod parse-ipv4-option :default [option] option)
 (defmethod parse-ipv4-option 0 [_option] {:type :eol})
-(defmethod parse-ipv4-option 1 [_option] {:type :eol})
+(defmethod parse-ipv4-option 1 [_option] {:type :nop})
 
 (defn parse-ipv4-options
   [b]
