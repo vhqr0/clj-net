@@ -1,13 +1,6 @@
 (ns clj-net.inet.packet
   (:require [clj-bytes.struct :as st]))
 
-(defn enumvar
-  [st kimapvar]
-  (-> st
-      (st/wrap
-       #(get (:k->i @kimapvar) % %)
-       #(get (:i->k @kimapvar) % %))))
-
 (defmulti parse
   "Parse packet of type from buffer, return parse result
   and remain buffer, or nil if parse failed.
