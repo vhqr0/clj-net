@@ -97,8 +97,9 @@
   (let [{:keys [magic vermaj vermin tz sig snaplen linktype]
          :or {magic :be-ms vermaj 2 vermin 4 tz 0 sig 0 snaplen 4096 linktype 1}}
         opts
-        st-header (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-header st-pcap-le-header)
-        st-packet (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-packet st-pcap-le-packet)
+        be? (contains? #{:be-ms :be-ns} magic)
+        st-header (st-pcap-header be?)
+        st-packet (st-pcap-packet be?)
         header (b/concat!
                 (-> magic (st/pack st-pcap-magic))
                 (-> {:vermaj vermaj :vermin vermin :tz tz :sig sig :snaplen snaplen :linktype linktype} (st/pack st-header)))
