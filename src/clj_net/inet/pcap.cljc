@@ -29,9 +29,6 @@
      :snaplen st-uint32
      :linktype st-uint32)))
 
-(def st-pcap-be-header (st-pcap-header true))
-(def st-pcap-le-header (st-pcap-header false))
-
 (defn st-pcap-packet
   [be?]
   (let [st-uint32 (if be? st/uint32-be st/uint32-le)]
@@ -41,9 +38,6 @@
      :caplen st-uint32
      :wirelen st-uint32
      :data (st/lazy #(st/bytes-var (:snaplen %))))))
-
-(def st-pcap-be-packet (st-pcap-packet true))
-(def st-pcap-le-packet (st-pcap-packet false))
 
 (defn ->pcap-read-state
   []
@@ -62,7 +56,8 @@
 
 (defmethod advance-pcap-read-state :wait-header [state]
   (let [{:keys [magic buffer]} state
-        st-header (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-header st-pcap-le-header)]
+        be? (contains? #{:be-ms :be-ns} magic)
+        st-header (st-pcap-header be?)]
     (if-let [[header buffer] (-> buffer (st/unpack st-header))]
       (let [[s state] (-> state
                           (assoc :stage :wait-packet :header header :buffer buffer)
@@ -72,7 +67,8 @@
 
 (defmethod advance-pcap-read-state :wait-packet [state]
   (let [{:keys [magic buffer]} state
-        st-packet (if (contains? #{:be-ms :be-ns} magic) st-pcap-be-packet st-pcap-le-packet)]
+        be? (contains? #{:be-ms :be-ns} magic)
+        st-packet (st-pcap-packet be?)]
     (if-let [[packet buffer] (-> buffer (st/unpack st-packet))]
       (let [[s state] (-> state
                           (assoc :buffer buffer)
