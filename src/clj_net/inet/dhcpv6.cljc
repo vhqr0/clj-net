@@ -39,7 +39,7 @@
    :info (st/lazy
           (fn [{:keys [msg-type]}]
             (case msg-type
-              (12 13) st-dhcpv6-relay-info
+              (:relay-forw :relay-repl) st-dhcpv6-relay-info
               (st/bytes-fixed 3))))
    :options st/bytes))
 
