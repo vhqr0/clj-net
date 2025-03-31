@@ -19,30 +19,6 @@
     :icmpv4-information-request 15
     :icmpv4-information-reply   16}))
 
-(def icmpv4-redirect-code-map
-  (st/->kimap
-   {:network-redirect     0
-    :host-redirect        1
-    :tos-network-redirect 2
-    :tos-host-redirect    3}))
-
-(def icmpv4-dest-unreach-code-map
-  (st/->kimap
-   {:network-unreachable  0
-    :host-unreachable     1
-    :protocol-unreachable 2
-    :port-unreachable     3
-    :fragmentation-needed 4
-    :source-route-failed  5}))
-
-(def icmpv4-time-exceeded-code-map
-  (st/->kimap
-   {:ttl-zero-during-transit    0
-    :ttl-zero-during-reassembly 1}))
-
-(def icmpv4-param-problem-code-map
-  (st/->kimap {:ip-header-bad 0}))
-
 (def st-icmpv4
   (st/keys
    :type st/uint8
@@ -58,30 +34,28 @@
   (st/keys
    :gw ia/st-ipv4))
 
-(defmethod pkt/parse :icmpv4 [type {:icmpv4/keys [type-map] :as opts} context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv4 type opts context buffer
-   (fn [packet context]
-     (let [{:keys [type code]} (:st packet)
-           next-type (get-in type-map [:i->k type])
-           context (merge context #:icmpv4{:proto next-type :code code})]
-       [packet context {:next-type next-type}]))))
+(defmethod pkt/parse :icmpv4 [type _context buffer]
+  (pkt/parse-packet
+   st-icmpv4 type buffer
+   (fn [{:keys [type code]}]
+     {:context-extra #:icmpv4{:type type :code code}
+      :next-info {:type [:icmpv4 type]}})))
+
+(doseq [[k i] (:k->i icmpv4-type-map)]
+  (defmethod pkt/parse [:icmpv4 i] [_type context buffer] (pkt/parse k context buffer)))
 
 (defn parse-icmpv4-echo
-  [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv4-echo type opts context buffer
-   (fn [packet context]
-     (let [{:keys [id seq]} (:st packet)
-           context (merge context #:icmpv4{:id id :seq seq})]
-       [packet context]))))
+  [type buffer]
+  (pkt/parse-packet
+   st-icmpv4-echo type buffer
+   (fn [{:keys [id seq]}]
+     {:context-extra #:icmpv4{:id id :seq seq}})))
 
-(defmethod pkt/parse :icmpv4-echo-request [type opts context buffer]
-  (parse-icmpv4-echo type opts context buffer))
+(defmethod pkt/parse :icmpv4-echo-request [type _context buffer]
+  (parse-icmpv4-echo type buffer))
 
-(defmethod pkt/parse :icmpv4-echo-reply [type opts context buffer]
-  (parse-icmpv4-echo type opts context buffer))
+(defmethod pkt/parse :icmpv4-echo-reply [type _context buffer]
+  (parse-icmpv4-echo type buffer))
 
-(defmethod pkt/parse :icmpv4-redirect [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv4-redirect type opts context buffer))
+(defmethod pkt/parse :icmpv4-redirect [type _context buffer]
+  (pkt/parse-packet st-icmpv4-redirect type buffer))

@@ -2,9 +2,11 @@
   (:require [clojure.string :as str]
             [clj-bytes.core :as b]
             [clj-bytes.struct :as st]
-            [clj-net.inet.addr :as ia]))
+            [clj-net.inet.addr :as ia]
+            [clj-net.inet.packet :as pkt]))
 
-;; RFC 1035
+;; RFC 1035 DNS
+;; RFC 3596 DNS AAAA
 
 (defmethod st/pack :clj-net.inet/dns-name [d _st]
   (let [ds (if-not (string? d)
@@ -64,36 +66,7 @@
   ;; => ["google" 20]
   )
 
-(def st-dns-rr
-  (st/keys
-   :rrname st-dns-name
-   :type st/uint16-be
-   :rclass st/uint16-be
-   :ttl st/uint32-be
-   :rdata (st/bytes-var st/uint16-be)))
-
-(def st-dns-qr
-  (st/keys
-   :qname st-dns-name
-   :qtype st/uint16-be
-   :qclass st/uint16-be))
-
-(def st-dns
-  (-> (st/keys
-       :id st/uint16-be
-       :qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode (st/bits [1 4 1 1 1 1 1 1 1 4])
-       :qdcount st/uint16-be
-       :ancount st/uint16-be
-       :nscount st/uint16-be
-       :arcount st/uint16-be
-       :qd (st/lazy #(st/coll-of (:qdcount %) st-dns-qr))
-       :an (st/lazy #(st/coll-of (:ancount %) st-dns-rr))
-       :ns (st/lazy #(st/coll-of (:nscount %) st-dns-rr))
-       :ar (st/lazy #(st/coll-of (:arcount %) st-dns-rr)))
-      (st/wrap-vec-destructs
-       {:qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :ac :rcode]})))
-
-(def dns-rr-type-map
+(def dns-type-map
   (st/->kimap
    {:a      1
     :ns     2
@@ -110,10 +83,40 @@
     :hinfo 13
     :minfo 14
     :mx    15
-    :txt   16}))
+    :txt   16
+    :aaaa  28}))
 
-(def dns-rr-class-map
+(def dns-class-map
   (st/->kimap {:in 1}))
+
+(def st-dns-rr
+  (st/keys
+   :name st-dns-name
+   :type st/uint16-be
+   :class st/uint16-be
+   :ttl st/uint32-be
+   :rdata (st/bytes-var st/uint16-be)))
+
+(def st-dns-qr
+  (st/keys
+   :name st-dns-name
+   :type st/uint16-be
+   :class st/uint16-be))
+
+(def st-dns
+  (-> (st/keys
+       :id st/uint16-be
+       :qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode (st/bits [1 4 1 1 1 1 1 1 1 4])
+       :qdcount st/uint16-be
+       :ancount st/uint16-be
+       :nscount st/uint16-be
+       :arcount st/uint16-be
+       :qd (st/lazy #(st/coll-of (:qdcount %) st-dns-qr))
+       :an (st/lazy #(st/coll-of (:ancount %) st-dns-rr))
+       :ns (st/lazy #(st/coll-of (:nscount %) st-dns-rr))
+       :ar (st/lazy #(st/coll-of (:arcount %) st-dns-rr)))
+      (st/wrap-vec-destructs
+       {:qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :ac :rcode]})))
 
 (def st-dns-rr-cname
   st-dns-name)
@@ -147,3 +150,31 @@
   (st/keys
    :preference st/uint16-be
    :exchange st-dns-name))
+
+(def dns-rr-st-map
+  {:cname st-dns-rr-cname
+   :ns st-dns-rr-ns
+   :ptr st-dns-rr-ptr
+   :a st-dns-rr-a
+   :aaaa st-dns-rr-aaaa
+   :txt st-dns-rr-txt
+   :mx st-dns-rr-mx})
+
+(defmulti parse-dns-rr
+  (fn [option] (:type option)))
+
+(defmethod parse-dns-rr :default [option] option)
+
+(doseq [[k i] (:k->i dns-type-map)]
+  (if-let [st (get dns-rr-st-map k)]
+    (defmethod parse-dns-rr i [option] (pkt/parse-option option k st))
+    (defmethod parse-dns-rr i [option] (pkt/parse-option option k))))
+
+(defmethod pkt/parse :dns [type buffer]
+  (pkt/parse-packet
+   st-dns type buffer
+   (fn [{:keys [an ns ar]}]
+     (let [an (->> an (mapv parse-dns-rr))
+           ns (->> ns (mapv parse-dns-rr))
+           ar (->> ar (mapv parse-dns-rr))]
+       {:data-extra {:an an :ns ns :ar ar}}))))

@@ -14,11 +14,12 @@
    :src ia/st-mac
    :type st/uint16-be))
 
-(defmethod pkt/parse :ether [_type {:ether/keys [type-map] :as opts} context buffer]
-  (pkt/parse-simple-packet
-   st-ether type opts context buffer
-   (fn [packet context]
-     (let [{:keys [dst src type]} (:st packet)
-           type (get-in type-map [:i->k type])
-           context (merge context #:ether{:type type :src src :dst dst})]
-       [packet context {:next-type type}]))))
+(defmethod pkt/parse :ether [type _context buffer]
+  (pkt/parse-packet
+   st-ether type buffer
+   (fn [{:keys [type src dst]}]
+     {:context-extra #:ether{:type type :src src :dst dst}
+      :next-info {:type [:ether type]}})))
+
+(doseq [[k i] (:k->i ether-type-map)]
+  (defmethod pkt/parse [:ether i] [_type context buffer] (pkt/parse k context buffer)))

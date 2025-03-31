@@ -4,7 +4,7 @@
 
 ;; RFC 768
 
-(def udp-service-map
+(def ^:dynamic *udp-service-map*
   (st/->kimap
    {:dns            53
     :dhcpv4-client  67
@@ -19,12 +19,11 @@
    :len st/uint16-be
    :chksum st/uint16-be))
 
-(defmethod pkt/parse :udp [type {:udp/keys [service-map] :as opts} context buffer]
-  (pkt/parse-simple-packet
-   st-udp type opts context buffer
-   (fn [packet context]
-     (let [{:keys [sport dport len]} (:st packet)
-           plen (- len 8)
-           service (or (get-in service-map [:i->k dport]) (get-in service-map [:i->k sport]))
-           context (merge context #:udp{:service service :sport sport :dport dport :plen plen})]
-       [packet context {:next-type service :next-length plen}]))))
+(defmethod pkt/parse :udp [type _context buffer]
+  (pkt/parse-packet
+   st-udp type buffer
+   (fn [{:keys [sport dport len]}]
+     (let [plen (- len 8)
+           service (->> [dport sport] (some (:i->k *udp-service-map*)))]
+       {:context-extra #:udp{:service service :sport sport :dport dport :plen plen}
+        :next-info {:type (when (keyword? service) service) :length plen}}))))

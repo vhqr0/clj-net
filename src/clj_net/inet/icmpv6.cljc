@@ -20,28 +20,6 @@
     :icmpv6-nd-na          136
     :icmpv6-nd-redirect    137}))
 
-(def icmpv6-dest-unreach-code-map
-  (st/->kimap
-   {:no-route-to-destination        0
-    :administratively-prohibited    1
-    :beyond-scope-of-source-address 2
-    :address-unreachable            3
-    :port-unreachable               4
-    :source-address-failed-policy   5
-    :reject-route-to-destination    6}))
-
-(def icmpv6-time-exceeded-code-map
-  (st/->kimap
-   {:hop-limit-exceeded-in-transit     0
-    :fragment-reassembly-time-exceeded 1}))
-
-(def icmpv6-param-problem-code-map
-  (st/->kimap
-   {:erroneous-header-field-encountered         0
-    :unrecognized-next-header-type-encountered  1
-    :unrecognized-ipv6-option-encountered       2
-    :first-fragment-has-incomplete-header-chain 3}))
-
 (def st-icmpv6
   (st/keys
    :type st/uint8
@@ -134,50 +112,71 @@
    :res st/uint16-be
    :mtu st/uint32-be))
 
-(defmethod pkt/parse :icmpv6 [_type {:icmpv6/keys [type-map] :as opts} context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6 type opts context buffer
-   (fn [packet context]
-     (let [{:keys [type code]} (:st packet)
-           next-type (get-in type-map [:i->k type])
-           context (merge context #:icmpv6{:proto next-type :code code})]
-       [packet context {:next-type next-type}]))))
+(def icmpv6-nd-option-st-map
+  {:src-lladdr st-icmpv6-nd-option-lladdr
+   :dst-lladdr st-icmpv6-nd-option-lladdr
+   :prefix-info st-icmpv6-nd-option-prefix-info
+   :mtu st-icmpv6-nd-option-mtu})
+
+(defmulti parse-icmpv6-nd-option
+  (fn [option] (:type option)))
+
+(defmethod parse-icmpv6-nd-option :default [option] option)
+
+(doseq [[k i] (:k->i icmpv6-nd-option-map)]
+  (if-let [st (get icmpv6-nd-option-st-map k)]
+    (defmethod parse-icmpv6-nd-option i [option] (pkt/parse-option option k st))
+    (defmethod parse-icmpv6-nd-option i [option] (pkt/parse-option option k))))
+
+(defn parse-icmpv6-nd-options
+  [b]
+  (->> (st/unpack-many b st-icmpv6-nd-option)
+       (mapv parse-icmpv6-nd-options)))
+
+(defmethod pkt/parse :icmpv6 [type _context buffer]
+  (pkt/parse-packet
+   st-icmpv6 type buffer
+   (fn [{:keys [type code]}]
+     {:context-extra #:icmpv6{:type type :code code}
+      :next-info {:type [:icmpv6 type]}})))
+
+(doseq [[k i] (:k->i icmpv6-type-map)]
+  (defmethod pkt/parse [:icmpv6 i] [_type context buffer] (pkt/parse k context buffer)))
 
 (defn parse-icmpv6-echo
-  [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-echo type opts context buffer
-   (fn [packet context]
-     (let [{:keys [id seq]} (:st packet)
-           context (merge context #:icmpv6{:id id :seq seq})]
-       [packet context]))))
+  [type buffer]
+  (pkt/parse-packet
+   st-icmpv6-echo type buffer
+   (fn [{:keys [id seq]}]
+     {:context-extra #:icmpv6{:id id :seq seq}})))
 
-(defmethod pkt/parse :icmpv6-echo-request [type opts context buffer]
-  (parse-icmpv6-echo type opts context buffer))
+(defmethod pkt/parse :icmpv6-echo-request [type _context buffer]
+  (parse-icmpv6-echo type buffer))
 
-(defmethod pkt/parse :icmpv6-echo-reply [type opts context buffer]
-  (parse-icmpv6-echo type opts context buffer))
+(defmethod pkt/parse :icmpv6-echo-reply [type _context buffer]
+  (parse-icmpv6-echo type buffer))
 
-(defmethod pkt/parse :icmpv6-packet-too-big [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-packet-too-big type opts context buffer))
+(defmethod pkt/parse :icmpv6-packet-too-big [type _context buffer]
+  (pkt/parse-packet st-icmpv6-packet-too-big type buffer))
 
-(defmethod pkt/parse :icmpv6-nd-rs [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-nd-rs type opts context buffer))
+(defn parse-icmpv6-nd
+  [st type buffer]
+  (pkt/parse-packet
+   st type buffer
+   (fn [{:keys [options]}]
+     {:extra-data {:options (parse-icmpv6-nd-options options)}})))
 
-(defmethod pkt/parse :icmpv6-nd-ra [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-nd-ra type opts context buffer))
+(defmethod pkt/parse :icmpv6-nd-rs [type _context buffer]
+  (parse-icmpv6-nd st-icmpv6-nd-rs type buffer))
 
-(defmethod pkt/parse :icmpv6-nd-ns [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-nd-ns type opts context buffer))
+(defmethod pkt/parse :icmpv6-nd-ra [type _context buffer]
+  (parse-icmpv6-nd st-icmpv6-nd-ra type buffer))
 
-(defmethod pkt/parse :icmpv6-nd-na [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-nd-na type opts context buffer))
+(defmethod pkt/parse :icmpv6-nd-ns [type _context buffer]
+  (parse-icmpv6-nd st-icmpv6-nd-ns type buffer))
 
-(defmethod pkt/parse :icmpv6-nd-redirect [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-icmpv6-nd-redirect type opts context buffer))
+(defmethod pkt/parse :icmpv6-nd-na [type _context buffer]
+  (parse-icmpv6-nd st-icmpv6-nd-na type buffer))
+
+(defmethod pkt/parse :icmpv6-nd-redirect [type _context buffer]
+  (parse-icmpv6-nd st-icmpv6-nd-redirect type buffer))

@@ -22,22 +22,19 @@
        {:dataofs-res [:dataofs :res]
         :cwr-ece-urg-ack-psh-rst-syn-fin [:cwr :ece :urg :ack :psh :rst :syn :fin]})))
 
+(def tcp-option-map
+  (st/->kimap {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6}))
+
 (def st-tcp-option
   (st/keys
    :type st/uint8
    :data (st/lazy
           (fn [{:keys [type]}]
             (case type
-              (0 1) (st/bytes-fixed 0)
+              (:eol :nop) (st/bytes-fixed 0)
               (-> st/uint8
                   (st/wrap #(+ % 2) #(- % 2))
                   st/bytes-var))))))
-
-(def st-tcp-options
-  (st/coll-of st-tcp-option))
-
-(def tcp-option-map
-  (st/->kimap {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6}))
 
 (def st-tcp-option-mss
   st/uint16-be)
@@ -53,39 +50,34 @@
    :tsval st/uint32-be
    :tsecr st/uint16-be))
 
+(def tcp-option-st-map
+  {:mss st-tcp-option-mss
+   :wscale st-tcp-option-wscale
+   :sack st-tcp-option-sack
+   :timestamp st-tcp-option-timestamp})
+
 (defmulti parse-tcp-option
-  (fn [type _data] type))
+  (fn [option] (:type option)))
 
-(defmethod parse-tcp-option :default [_type _data])
+(defmethod parse-tcp-option :default [option] option)
+(defmethod parse-tcp-option 0 [_option] {:type :eol})
+(defmethod parse-tcp-option 1 [_option] {:type :eol})
 
-(defmethod parse-tcp-option :mss [_type data]
-  (-> data (st/unpack st-tcp-option-mss)))
-
-(defmethod parse-tcp-option :wscale [_type data]
-  (-> data (st/unpack st-tcp-option-wscale)))
-
-(defmethod parse-tcp-option :sack [_type data]
-  (-> data (st/unpack st-tcp-option-sack)))
-
-(defmethod parse-tcp-option :timestamp [_type data]
-  (-> data (st/unpack st-tcp-option-timestamp)))
+(doseq [[k i] (:k->i tcp-option-map)]
+  (when-not (contains? #{0 1} i)
+    (if-let [st (get tcp-option-st-map k)]
+      (defmethod parse-tcp-option i [option] (pkt/parse-option option k st))
+      (defmethod parse-tcp-option i [option] (pkt/parse-option option k)))))
 
 (defn parse-tcp-options
-  [b {:tcp/keys [option-map]}]
-  (->> (st/unpack b st-tcp-options)
-       (map #(pkt/parse-option % option-map parse-tcp-option))
-       reverse
-       (drop-while (fn [[type _data]] (= type :nop)))
-       reverse
-       vec))
+  [b]
+  (->> (st/unpack-many b st-tcp-option)
+       (mapv parse-tcp-option)))
 
-(defmethod pkt/parse :tcp [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-tcp type opts context buffer
-   (fn [{:keys [st] :as packet} context]
-     (let [{:keys [sport dport seq ack window options]} st
-           flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get st %))) set)
-           options (parse-tcp-options options opts)
-           packet (assoc packet :flags flags :options options)
-           context (merge context #:tcp{:sport sport :dport dport :seq seq :ack ack :window window :flags flags})]
-       [packet context]))))
+(defmethod pkt/parse :tcp [type _context buffer]
+  (pkt/parse-packet
+   st-tcp type buffer
+   (fn [{:keys [sport dport seq ack window options] :as data}]
+     (let [flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get data %))) set)]
+       {:data-extra {:flags flags :options (parse-tcp-options options)}
+        :context-extra #:tcp{:sport sport :dport dport :seq seq :ack ack :window window :flags flags}}))))

@@ -1,6 +1,5 @@
 (ns clj-net.inet.ipv4
-  (:require [clj-bytes.core :as b]
-            [clj-bytes.struct :as st]
+  (:require [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
             [clj-net.inet.packet :as pkt]
             [clj-net.inet.ip :as ip]))
@@ -38,25 +37,21 @@
                   (st/wrap #(+ % 2) #(- % 2))
                   st/bytes-var))))))
 
-(def st-ipv4-options
-  (st/coll-of st-ipv4-option))
+(defmulti parse-ipv4-option
+  (fn [option] (:type option)))
+
+(defmethod parse-ipv4-option :default [option] option)
+(defmethod parse-ipv4-option 0 [_option] {:type :eol})
+(defmethod parse-ipv4-option 1 [_option] {:type :eol})
 
 (defn parse-ipv4-options
-  [b {:ipv4/keys [option-map]}]
-  (->> (st/unpack b st-ipv4-options)
-       (map #(pkt/parse-option % option-map))
-       reverse
-       (drop-while (fn [[type _data]] (= type :nop)))
-       reverse
-       vec))
+  [b]
+  (->> (st/unpack-many b st-ipv4-option)
+       (mapv parse-ipv4-option)))
 
-(defmethod pkt/parse :ipv4 [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-ipv4 type opts context buffer
-   (fn [packet context]
-     (let [{:keys [proto id offset src dst ihl len options]} (:st packet)
-           proto (when (zero? offset) proto)
-           packet (cond-> packet
-                    (not (b/empty? options))
-                    (assoc :options (parse-ipv4-options options opts)))]
-       (ip/parse-ip-xform opts packet context 4 id proto src dst (- len (* 5 ihl)))))))
+(defmethod pkt/parse :ipv4 [type _context buffer]
+  (pkt/parse-packet
+   st-ipv4 type buffer
+   (fn [{:keys [id proto offset src dst ihl len options]}]
+     (merge (ip/parse-ip-result 4 id proto src dst (- len (* 5 ihl)) offset)
+            {:data-extra {:options (parse-ipv4-options options)}}))))

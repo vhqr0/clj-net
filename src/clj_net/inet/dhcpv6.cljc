@@ -1,6 +1,7 @@
 (ns clj-net.inet.dhcpv6
   (:require [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
+            [clj-net.inet.packet :as pkt]
             [clj-net.inet.dns :as dns]))
 
 ;; RFC 8415 DHCPv6
@@ -74,7 +75,7 @@
     :use-multicast   5
     :no-prefix-avail 6}))
 
-(def dhcpv6-option-type-map
+(def dhcpv6-option-map
   (st/->kimap
    {:client-id             1
     :server-id             2
@@ -181,3 +182,45 @@
 
 (def st-dhcpv6-option-sntp-servers
   (st/coll-of ia/st-ipv6))
+
+(def dhcpv6-option-st-map
+  {:ia-na st-dhcpv6-option-ia-na
+   :ia-ta st-dhcpv6-option-ia-ta
+   :iaaddress st-dhcpv6-option-iaaddress
+   :opt-req st-dhcpv6-option-opt-req
+   :pref st-dhcpv6-option-pref
+   :elapsed-time st-dhcpv6-option-elapsed-time
+   :server-unicast st-dhcpv6-option-server-unicast
+   :status-code st-dhcpv6-option-status-code
+   :reconf-msg st-dhcpv6-option-reconf-msg
+   :ia-pd st-dhcpv6-option-ia-pd
+   :iaprefix st-dhcpv6-option-iaprefix
+   :info-refresh-time st-dhcpv6-option-info-refresh-time
+   :dns-servers st-dhcpv6-option-dns-servers
+   :dns-domain st-dhcpv6-option-dns-domains
+   :sntp-servers st-dhcpv6-option-sntp-servers})
+
+(defmulti parse-dhcpv6-option
+  (fn [option] (:type option)))
+
+(defmethod parse-dhcpv6-option :default [option] option)
+
+(doseq [[k i] (:k->i dhcpv6-option-map)]
+  (if-let [st (get dhcpv6-option-st-map k)]
+    (defmethod parse-dhcpv6-option i [option] (pkt/parse-option option k st))
+    (defmethod parse-dhcpv6-option i [option] (pkt/parse-option option k))))
+
+(defn parse-dhcpv6-options
+  [b]
+  (->> (st/unpack-many b st-dhcpv6-option)
+       (mapv parse-dhcpv6-option)))
+
+(defmethod pkt/parse :dhcpv6 [type _context buffer]
+  (pkt/parse-packet
+   st-dhcpv6 type buffer
+   (fn [{:keys [options]}]
+     (let [options (parse-dhcpv6-options options)]
+       {:data-extra {:options options}}))))
+
+(defmethod pkt/parse :dhcpv6-client [_type context buffer] (pkt/parse :dhcpv6 context buffer))
+(defmethod pkt/parse :dhcpv6-server [_type context buffer] (pkt/parse :dhcpv6 context buffer))

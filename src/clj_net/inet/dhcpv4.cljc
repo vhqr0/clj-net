@@ -1,6 +1,7 @@
 (ns clj-net.inet.dhcpv4
   (:require [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
+            [clj-net.inet.packet :as pkt]
             [clj-net.inet.dns :as dns]))
 
 ;; RFC 2131 DHCPv4
@@ -53,7 +54,7 @@
 (def st-dhcpv4-message-type
   (st/enum st/uint8 st-dhcpv4-message-type-map))
 
-(def st-dhcpv4-option-map
+(def dhcpv4-option-map
   (st/->kimap
    {:end                        255
     :pad                          0
@@ -157,7 +158,7 @@
 (def st-dhcpv4-option-server-id
   ia/st-ipv4)
 
-(def st-dhcpv4-option-req-list
+(def st-dhcpv4-option-param-req-list
   (st/coll-of st/uint8))
 
 (def st-dhcpv4-option-renewal-time
@@ -165,3 +166,44 @@
 
 (def st-dhcpv4-option-rebinding-time
   st/uint32-be)
+
+(def dhcpv4-option-st-map
+  {:subnet-mask st-dhcpv4-option-subnet-mask
+   :name-server st-dhcpv4-option-name-server
+   :hostname st-dhcpv4-option-hostname
+   :domain st-dhcpv4-option-domain
+   :mtu st-dhcpv4-option-mtu
+   :broadcast-address st-dhcpv4-option-broadcast-address
+   :ntp-server st-dhcpv4-option-ntp-server
+   :requested-addr st-dhcpv4-option-requested-addr
+   :lease-time st-dhcpv4-option-lease-time
+   :message-type st-dhcpv4-option-message-type
+   :server-id st-dhcpv4-option-server-id
+   :param-req-list st-dhcpv4-option-param-req-list
+   :renewal-time st-dhcpv4-option-renewal-time
+   :rebinding-time st-dhcpv4-option-rebinding-time})
+
+(defmulti parse-dhcpv4-option
+  (fn [option] (:type option)))
+
+(defmethod parse-dhcpv4-option :default [option] option)
+
+(doseq [[k i] (:k->i dhcpv4-option-map)]
+  (if-let [st (get dhcpv4-option-st-map k)]
+    (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k st))
+    (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k))))
+
+(defn parse-dhcpv4-options
+  [b]
+  (->> (st/unpack-many b st-dhcpv4-option)
+       (mapv parse-dhcpv4-option)))
+
+(defmethod pkt/parse :dhcpv4 [type _context buffer]
+  (pkt/parse-packet
+   st-dhcpv4 type buffer
+   (fn [{:keys [options]}]
+     (let [options (parse-dhcpv4-options options)]
+       {:data-extra {:options options}}))))
+
+(defmethod pkt/parse :dhcpv4-client [_type context buffer] (pkt/parse :dhcpv4 context buffer))
+(defmethod pkt/parse :dhcpv4-server [_type context buffer] (pkt/parse :dhcpv4 context buffer))

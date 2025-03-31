@@ -37,21 +37,24 @@
     :tcp                 6
     :udp                17}))
 
-(defmethod pkt/parse :ip [_type opts context buffer]
+(defmethod pkt/parse :ip [_type context buffer]
   (when-not (b/empty? buffer)
     (let [version (-> (b/uget buffer 0) (bit-shift-right 4))]
       (case version
-        4 (pkt/parse :ipv4 opts context buffer)
-        6 (pkt/parse :ipv6 opts context buffer)))))
+        4 (pkt/parse :ipv4 context buffer)
+        6 (pkt/parse :ipv6 context buffer)))))
 
-(defn parse-ip-xform
-  [{:ip/keys [proto-map]} packet context version id proto src dst plen]
-  (let [proto (when (some? proto) (get-in proto-map [:i->k proto]))
-        context (merge context #:ip{:version version :id id :proto proto :src src :dst dst :plen plen})]
-    [packet context {:next-type proto :next-length plen}]))
+(defn parse-ip-result
+  [version id proto src dst plen offset]
+  {:context-extra #:ip{:version version :id id :proto proto :dst dst :src src :plen plen :offset offset}
+   :next-info {:type (when (zero? offset) [:ip proto]) :length plen}})
 
-(defn parse-ip-ext-xform
-  [{:ip/keys [proto-map]} packet context proto]
-  (let [proto (when (some? proto) (get-in proto-map [:i->k proto]))
-        context (merge context #:ip{:proto proto})]
-    [packet context {:next-type proto}]))
+(defn parse-ip-ext-result
+  ([proto]
+   (parse-ip-ext-result proto nil))
+  ([proto offset]
+   {:context-extra #:ip{:proto proto :offset offset}
+    :next-info {:type (when (zero? offset) [:ip proto])}}))
+
+(doseq [[k i] (:k->i ip-proto-map)]
+  (defmethod pkt/parse [:ip i] [_type context buffer] (pkt/parse k context buffer)))

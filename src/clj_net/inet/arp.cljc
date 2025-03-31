@@ -35,10 +35,5 @@
    :hwdst ia/st-mac
    :pdst ia/st-ipv4))
 
-(defmethod pkt/parse :arp [type opts context buffer]
-  (pkt/parse-simple-packet
-   st-arp type opts context buffer
-   (fn [packet context]
-     (let [{:keys [op hwsrc psrc hwdst pdst]} (:st packet)
-           context (merge context #:arp{:op op :src [hwsrc psrc] :dst [hwdst pdst]})]
-       [packet context]))))
+(defmethod pkt/parse :arp [type _context buffer]
+  (pkt/parse-packet st-arp type buffer))
