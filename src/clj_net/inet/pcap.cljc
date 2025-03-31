@@ -62,7 +62,7 @@
   (let [{:keys [st-header buffer]} state]
     (if-let [[header buffer] (-> buffer (st/unpack st-header))]
       (let [[s state] (-> state
-                          (assoc :stage :wait-packet :header header :buffer buffer)
+                          (assoc :stage :wait-packet :buffer buffer :header header)
                           advance-pcap-read-state)]
         [(cons header s) state])
       [nil state])))
