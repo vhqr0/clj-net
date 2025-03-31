@@ -49,15 +49,17 @@
 (defmethod advance-pcap-read-state :wait-magic [state]
   (let [{:keys [buffer]} state]
     (if-let [[magic buffer] (-> buffer (st/unpack st-pcap-magic))]
-      (-> state
-          (assoc :stage :wait-header :magic magic :buffer buffer)
-          advance-pcap-read-state)
+      (let [be? (contains? #{:be-ms :be-ns} magic)
+            st-header (st-pcap-header be?)
+            st-packet (st-pcap-packet be?)]
+        (-> state
+            (assoc :stage :wait-header :buffer buffer :magic magic
+                   :be? be? :st-header st-header :st-packet st-packet)
+            advance-pcap-read-state))
       [nil state])))
 
 (defmethod advance-pcap-read-state :wait-header [state]
-  (let [{:keys [magic buffer]} state
-        be? (contains? #{:be-ms :be-ns} magic)
-        st-header (st-pcap-header be?)]
+  (let [{:keys [st-header buffer]} state]
     (if-let [[header buffer] (-> buffer (st/unpack st-header))]
       (let [[s state] (-> state
                           (assoc :stage :wait-packet :header header :buffer buffer)
@@ -66,9 +68,7 @@
       [nil state])))
 
 (defmethod advance-pcap-read-state :wait-packet [state]
-  (let [{:keys [magic buffer]} state
-        be? (contains? #{:be-ms :be-ns} magic)
-        st-packet (st-pcap-packet be?)]
+  (let [{:keys [st-packet buffer]} state]
     (if-let [[packet buffer] (-> buffer (st/unpack st-packet))]
       (let [[s state] (-> state
                           (assoc :buffer buffer)
