@@ -26,4 +26,4 @@
      (let [plen (- len 8)
            service (->> [dport sport] (some (:i->k *udp-service-map*)))]
        {:context-extra #:udp{:service service :sport sport :dport dport :plen plen}
-        :next-info {:type (when (keyword? service) service) :length plen}}))))
+        :next-info {:type (when (some? service) service) :length plen}}))))
