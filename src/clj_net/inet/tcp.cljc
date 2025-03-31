@@ -31,7 +31,7 @@
    :data (st/lazy
           (fn [{:keys [type]}]
             (case type
-              (:eol :nop) (st/bytes-fixed 0)
+              (0 1) (st/bytes-fixed 0)
               (-> st/uint8
                   (st/wrap #(+ % 2) #(- % 2))
                   st/bytes-var))))))
