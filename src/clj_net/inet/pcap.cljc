@@ -37,7 +37,7 @@
      :usec st-uint32
      :caplen st-uint32
      :wirelen st-uint32
-     :data (st/lazy #(st/bytes-var (:snaplen %))))))
+     :data (st/lazy #(st/bytes-fixed (:caplen %))))))
 
 (defn ->pcap-read-state
   []

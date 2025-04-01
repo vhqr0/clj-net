@@ -22,11 +22,11 @@
   (st/keys
    :nh st/uint8
    :data (-> st/uint8
-             (st/wrap-validator
-              #(zero? (mod (- % 6) 8)))
              (st/wrap
               #(quot (- % 6) 8)
-              #(+ 6 (* 8 %)))
+              #(+ (* 8 %) 6))
+             (st/wrap-validator
+              #(and (nat-int? %) (zero? (mod (- % 6) 8))))
              st/bytes-var)))
 
 (def st-ipv6-ext-fragment

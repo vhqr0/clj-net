@@ -34,6 +34,7 @@
               (0 1) (st/bytes-fixed 0)
               (-> st/uint8
                   (st/wrap #(+ % 2) #(- % 2))
+                  (st/wrap-validator nat-int?)
                   st/bytes-var))))))
 
 (def st-tcp-option-mss

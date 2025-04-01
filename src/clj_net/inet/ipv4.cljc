@@ -15,10 +15,10 @@
        :res-df-mf-offset (st/bits [1 1 1 13])
        :ttl st/uint8
        :proto st/uint8
-       :chksum st/uint8
+       :chksum st/uint16-be
        :src ia/st-ipv4
        :dst ia/st-ipv4
-       :options (st/lazy #(st/bytes-fixed (* 4 (- (:ihl %) 5)))))
+       :options (st/lazy #(st/bytes-fixed (* 4 (- (second (:version-ihl %)) 5)))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
         :res-df-mf-offset [:res :df :mf :offset]})))

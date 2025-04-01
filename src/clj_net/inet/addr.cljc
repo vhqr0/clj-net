@@ -145,7 +145,7 @@
 
 (defmethod of-bytes :ipv6 [_type b]
   [{:pre [(= (b/count b) 16)]}]
-  (->> (b/of-useq b)
+  (->> (b/useq b)
        (partition 2)
        (mapv
         (fn [[l r]]

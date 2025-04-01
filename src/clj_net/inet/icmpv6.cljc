@@ -84,7 +84,11 @@
   (st/keys
    :type st/uint8
    :data (-> st/uint8
-             (st/wrap #(+ % 2) #(- % 2))
+             (st/wrap
+              #(quot (+ % 2) 8)
+              #(- (* 8 %) 2))
+             (st/wrap-validator
+              #(and (nat-int? %) (zero? (mod (+ % 2) 8))))
              st/bytes-var)))
 
 (def st-icmpv6-nd-option-lladdr
@@ -131,7 +135,7 @@
 (defn parse-icmpv6-nd-options
   [b]
   (->> (st/unpack-many b st-icmpv6-nd-option)
-       (mapv parse-icmpv6-nd-options)))
+       (mapv parse-icmpv6-nd-option)))
 
 (defmethod pkt/parse :icmpv6 [type _context buffer]
   (pkt/parse-packet
@@ -164,7 +168,7 @@
   (pkt/parse-packet
    st type buffer
    (fn [{:keys [options]}]
-     {:extra-data {:options (parse-icmpv6-nd-options options)}})))
+     {:data-extra {:options (parse-icmpv6-nd-options options)}})))
 
 (defmethod pkt/parse :icmpv6-nd-rs [type _context buffer]
   (parse-icmpv6-nd st-icmpv6-nd-rs type buffer))

@@ -1,5 +1,5 @@
 (ns clj-net.inet.core
-  (:require clj-net.inet.packet
+  (:require [clj-net.inet.packet :as pkt]
             clj-net.inet.ether
             clj-net.inet.arp
             clj-net.inet.ip
@@ -12,3 +12,6 @@
             clj-net.inet.dns
             clj-net.inet.dhcpv4
             clj-net.inet.dhcpv6))
+
+(defn parse-ether [buffer] (pkt/parse-layers :ether {} buffer))
+(defn parse-ip [buffer] (pkt/parse-layers :ip {} buffer))
