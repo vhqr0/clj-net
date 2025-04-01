@@ -78,8 +78,8 @@
 
 ^:rct/test
 (comment
-  (b/equal? (str->bytes :mac "33:33:00:00:00:01") (b/of-seq [51 51 0 0 0 1])) ; => true
-  (bytes->str :mac (b/of-seq [51 51 0 0 0 1])) ; => "33:33:00:00:00:01"
+  (b/equal? (str->bytes :mac "33:33:00:00:00:01") (b/of-useq [51 51 0 0 0 1])) ; => true
+  (bytes->str :mac (b/of-useq [51 51 0 0 0 1])) ; => "33:33:00:00:00:01"
   )
 
 ;;; ipv4
@@ -105,8 +105,8 @@
 
 ^:rct/test
 (comment
-  (b/equal? (str->bytes :ipv4 "192.168.0.1") (b/of-seq [192 168 0 1])) ; => true
-  (bytes->str :ipv4 (b/of-seq [192 168 0 1])) ; => "192.168.0.1"
+  (b/equal? (str->bytes :ipv4 "192.168.0.1") (b/of-useq [192 168 0 1])) ; => true
+  (bytes->str :ipv4 (b/of-useq [192 168 0 1])) ; => "192.168.0.1"
   )
 
 ;;; ipv6
@@ -154,14 +154,14 @@
 
 ^:rct/test
 (comment
-  (b/equal? (str->bytes :ipv6 "::1") (b/of-seq [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => true
-  (b/equal? (str->bytes :ipv6 "2000::") (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])) ; => true
-  (b/equal? (str->bytes :ipv6 "2000::1") (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => true
-  (b/equal? (str->bytes :ipv6 "2000:0:0:0:1:0:0:1") (b/of-seq [32 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1])) ; => true
-  (bytes->str :ipv6 (b/of-seq [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => "::1"
-  (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])) ; => "2000::"
-  (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => "2000::1"
-  (bytes->str :ipv6 (b/of-seq [32 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1])) ; => "2000::1:0:0:1"
+  (b/equal? (str->bytes :ipv6 "::1") (b/of-useq [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => true
+  (b/equal? (str->bytes :ipv6 "2000::") (b/of-useq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])) ; => true
+  (b/equal? (str->bytes :ipv6 "2000::1") (b/of-useq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => true
+  (b/equal? (str->bytes :ipv6 "2000:0:0:0:1:0:0:1") (b/of-useq [32 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1])) ; => true
+  (bytes->str :ipv6 (b/of-useq [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => "::1"
+  (bytes->str :ipv6 (b/of-useq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0])) ; => "2000::"
+  (bytes->str :ipv6 (b/of-useq [32 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1])) ; => "2000::1"
+  (bytes->str :ipv6 (b/of-useq [32 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1])) ; => "2000::1:0:0:1"
   )
 
 ;;; structs
