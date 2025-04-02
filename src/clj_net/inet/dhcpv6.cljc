@@ -36,7 +36,7 @@
 (def st-dhcpv6
   (st/keys
    :msg-type st-dhcpv6-msg-type
-   :info (st/lazy
+   :trid (st/lazy
           (fn [{:keys [msg-type]}]
             (case msg-type
               (:relay-forw :relay-repl) st-dhcpv6-relay-info
