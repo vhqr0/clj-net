@@ -1,8 +1,7 @@
 (ns clj-net.inet.dhcpv4
   (:require [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
-            [clj-net.inet.packet :as pkt]
-            [clj-net.inet.dns :as dns]))
+            [clj-net.inet.packet :as pkt]))
 
 ;; RFC 2131 DHCPv4
 ;; RFC 2132 DHCPv4 options
