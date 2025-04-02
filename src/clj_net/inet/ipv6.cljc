@@ -55,7 +55,7 @@
 
 (defmethod parse-ipv6-option :default [option] option)
 (defmethod parse-ipv6-option 0 [_option] {:type :pad1})
-(defmethod parse-ipv6-option 1 [option] (pkt/parse-option option type))
+(defmethod parse-ipv6-option 1 [option] (assoc option :type :padn))
 
 (defn parse-ipv6-options
   [b]
@@ -63,13 +63,13 @@
        (mapv parse-ipv6-option)))
 
 (defmethod pkt/parse :ipv6 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-ipv6 type buffer
    (fn [{:keys [nh fl src dst plen]}]
      (ip/parse-ip-result 6 fl nh src dst plen 0))))
 
 (defn parse-ipv6-ext-opts [type buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-ipv6-ext type buffer
    (fn [{:keys [nh data]}]
      (merge (ip/parse-ip-ext-result nh)
@@ -82,16 +82,16 @@
   (parse-ipv6-ext-opts type buffer))
 
 (defmethod pkt/parse :ipv6-ext-routing [type _context buffer]
-  (pkt/parse-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
+  (pkt/unpack-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
 
 (defmethod pkt/parse :ipv6-ext-esp [type _context buffer]
-  (pkt/parse-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
+  (pkt/unpack-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
 
 (defmethod pkt/parse :ipv6-ext-ah [type _context buffer]
-  (pkt/parse-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
+  (pkt/unpack-packet st-ipv6-ext type buffer #(ip/parse-ip-ext-result (:nh %))))
 
 (defmethod pkt/parse :ipv6-ext-fragment [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-ipv6-ext-fragment type buffer
    (fn [{:keys [nh offset]}]
      (ip/parse-ip-ext-result nh offset))))

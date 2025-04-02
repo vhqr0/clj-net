@@ -128,9 +128,8 @@
 (defmethod parse-icmpv6-nd-option :default [option] option)
 
 (doseq [[k i] (:k->i icmpv6-nd-option-map)]
-  (if-let [st (get icmpv6-nd-option-st-map k)]
-    (defmethod parse-icmpv6-nd-option i [option] (pkt/parse-option option k st))
-    (defmethod parse-icmpv6-nd-option i [option] (pkt/parse-option option k))))
+  (let [st (get icmpv6-nd-option-st-map k)]
+    (defmethod parse-icmpv6-nd-option i [option] (pkt/unpack-option st k option))))
 
 (defn parse-icmpv6-nd-options
   [b]
@@ -138,7 +137,7 @@
        (mapv parse-icmpv6-nd-option)))
 
 (defmethod pkt/parse :icmpv6 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-icmpv6 type buffer
    (fn [{:keys [type code]}]
      {:context-extra #:icmpv6{:type type :code code}
@@ -149,7 +148,7 @@
 
 (defn parse-icmpv6-echo
   [type buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-icmpv6-echo type buffer
    (fn [{:keys [id seq]}]
      {:context-extra #:icmpv6{:id id :seq seq}})))
@@ -161,11 +160,11 @@
   (parse-icmpv6-echo type buffer))
 
 (defmethod pkt/parse :icmpv6-packet-too-big [type _context buffer]
-  (pkt/parse-packet st-icmpv6-packet-too-big type buffer))
+  (pkt/unpack-packet st-icmpv6-packet-too-big type buffer))
 
 (defn parse-icmpv6-nd
   [st type buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st type buffer
    (fn [{:keys [options]}]
      {:data-extra {:options (parse-icmpv6-nd-options options)}})))

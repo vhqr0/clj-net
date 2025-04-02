@@ -15,7 +15,7 @@
    :type st/uint16-be))
 
 (defmethod pkt/parse :ether [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-ether type buffer
    (fn [{:keys [type src dst]}]
      {:context-extra #:ether{:type type :src src :dst dst}

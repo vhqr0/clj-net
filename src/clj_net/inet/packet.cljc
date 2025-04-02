@@ -19,7 +19,24 @@
 
 (def ^:dynamic *ex-handler* nil)
 
-(defn parse-layers
+(defn try-parse
+  "Try parse packet, ignore exception."
+  [type context buffer]
+  (let [[parse-res ex] (try-catch #(parse type context buffer))]
+    (when (and (some? *ex-handler*) (some? ex))
+      (*ex-handler* ex))
+    parse-res))
+
+(defn try-unpack
+  "Try unpack struct, or return nil if exception."
+  [buffer st]
+  (let [[data ex] (try-catch #(st/unpack-one buffer st))]
+    (when (and (some? *ex-handler*) (some? ex))
+      (*ex-handler* ex))
+    (if (some? ex) buffer data)))
+
+(defn parse-all
+  "Parse all buffer to many packets (layers), and context."
   [type context buffer]
   (loop [layers [] trail (b/empty) next-info {:type type} context context buffer buffer]
     (if (b/empty? buffer)
@@ -29,11 +46,7 @@
                              [buffer trail]
                              (let [[buffer new-trail] (b/split-at! length buffer)]
                                [buffer (b/concat! new-trail trail)]))
-            parse-res (when (some? type)
-                        (let [[parse-res ex] (try-catch #(parse type context buffer))]
-                          (when (and (some? *ex-handler*) (some? ex))
-                            (*ex-handler* ex))
-                          parse-res))]
+            parse-res (when (some? type) (try-parse type context buffer))]
         (if (nil? parse-res)
           (let [trail (b/concat! buffer trail)
                 layers (cond-> layers
@@ -44,12 +57,12 @@
                 context (merge context context-extra)]
             (recur (conj layers layer) trail next-info context buffer)))))))
 
-(defn parse-packet
+(defn unpack-packet
   "Parse a packet with specified struct, and an optional
   result-fn to get extra info from data, such as data-extra,
   context-extra or next-info."
   ([st type buffer]
-   (parse-packet st type buffer nil))
+   (unpack-packet st type buffer nil))
   ([st type buffer result-fn]
    (when-let [[data buffer] (-> buffer (st/unpack st))]
      (let [result (merge
@@ -58,14 +71,10 @@
                      (result-fn data)))]
        [result buffer]))))
 
-(defn parse-option
+(defn unpack-option
   "Parse an option, update type and data, if possible."
-  ([option type]
-   (-> option (assoc :type type)))
-  ([option type st]
-   (let [data (:data option)
-         data (let [[unpacked-data ex] (try-catch #(st/unpack-one data st))]
-                (when (and (some? *ex-handler*) (some? ex))
-                  (*ex-handler* ex))
-                (if (some? ex) data unpacked-data))]
-     (assoc option :type type :data data))))
+  [st type option]
+  (if (nil? st)
+    (assoc option :type type)
+    (let [data (-> option :data (try-unpack st))]
+      (assoc option :type type :data data))))

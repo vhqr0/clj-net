@@ -167,12 +167,11 @@
 (defmethod parse-dns-rr :default [option] option)
 
 (doseq [[k i] (:k->i dns-type-map)]
-  (if-let [st (get dns-rr-st-map k)]
-    (defmethod parse-dns-rr i [option] (pkt/parse-option option k st))
-    (defmethod parse-dns-rr i [option] (pkt/parse-option option k))))
+  (let [st (get dns-rr-st-map k)]
+    (defmethod parse-dns-rr i [option] (pkt/unpack-option st k option))))
 
 (defmethod pkt/parse :dns [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-dns type buffer
    (fn [{:keys [an ns ar]}]
      (let [an (->> an (mapv parse-dns-rr))

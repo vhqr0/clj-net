@@ -36,4 +36,4 @@
    :pdst ia/st-ipv4))
 
 (defmethod pkt/parse :arp [type _context buffer]
-  (pkt/parse-packet st-arp type buffer))
+  (pkt/unpack-packet st-arp type buffer))

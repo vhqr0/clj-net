@@ -195,9 +195,8 @@
 
 (doseq [[k i] (:k->i dhcpv4-option-map)]
   (when-not (contains? #{0 255} i)
-    (if-let [st (get dhcpv4-option-st-map k)]
-      (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k st))
-      (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k)))))
+    (let [st (get dhcpv4-option-st-map k)]
+      (defmethod parse-dhcpv4-option i [option] (pkt/unpack-option st k option)))))
 
 (defn parse-dhcpv4-options
   [b]
@@ -205,7 +204,7 @@
        (mapv parse-dhcpv4-option)))
 
 (defmethod pkt/parse :dhcpv4 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-dhcpv4 type buffer
    (fn [{:keys [options]}]
      (let [options (parse-dhcpv4-options options)]

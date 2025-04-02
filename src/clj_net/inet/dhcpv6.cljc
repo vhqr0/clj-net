@@ -206,9 +206,8 @@
 (defmethod parse-dhcpv6-option :default [option] option)
 
 (doseq [[k i] (:k->i dhcpv6-option-map)]
-  (if-let [st (get dhcpv6-option-st-map k)]
-    (defmethod parse-dhcpv6-option i [option] (pkt/parse-option option k st))
-    (defmethod parse-dhcpv6-option i [option] (pkt/parse-option option k))))
+  (let [st (get dhcpv6-option-st-map k)]
+    (defmethod parse-dhcpv6-option i [option] (pkt/unpack-option st k option))))
 
 (defn parse-dhcpv6-options
   [b]
@@ -216,7 +215,7 @@
        (mapv parse-dhcpv6-option)))
 
 (defmethod pkt/parse :dhcpv6 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-dhcpv6 type buffer
    (fn [{:keys [options]}]
      (let [options (parse-dhcpv6-options options)]

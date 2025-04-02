@@ -66,9 +66,8 @@
 
 (doseq [[k i] (:k->i tcp-option-map)]
   (when-not (contains? #{0 1} i)
-    (if-let [st (get tcp-option-st-map k)]
-      (defmethod parse-tcp-option i [option] (pkt/parse-option option k st))
-      (defmethod parse-tcp-option i [option] (pkt/parse-option option k)))))
+    (let [st (get tcp-option-st-map k)]
+      (defmethod parse-tcp-option i [option] (pkt/unpack-option st k option)))))
 
 (defn parse-tcp-options
   [b]
@@ -76,7 +75,7 @@
        (mapv parse-tcp-option)))
 
 (defmethod pkt/parse :tcp [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-tcp type buffer
    (fn [{:keys [sport dport seq ack window options] :as data}]
      (let [flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get data %))) set)]

@@ -50,7 +50,7 @@
        (mapv parse-ipv4-option)))
 
 (defmethod pkt/parse :ipv4 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-ipv4 type buffer
    (fn [{:keys [id proto offset src dst ihl len options]}]
      (merge (ip/parse-ip-result 4 id proto src dst (- len (* 4 ihl)) offset)

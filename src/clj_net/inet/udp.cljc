@@ -20,7 +20,7 @@
    :chksum st/uint16-be))
 
 (defmethod pkt/parse :udp [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-udp type buffer
    (fn [{:keys [sport dport len]}]
      (let [plen (- len 8)

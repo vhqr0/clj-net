@@ -35,7 +35,7 @@
    :gw ia/st-ipv4))
 
 (defmethod pkt/parse :icmpv4 [type _context buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-icmpv4 type buffer
    (fn [{:keys [type code]}]
      {:context-extra #:icmpv4{:type type :code code}
@@ -46,7 +46,7 @@
 
 (defn parse-icmpv4-echo
   [type buffer]
-  (pkt/parse-packet
+  (pkt/unpack-packet
    st-icmpv4-echo type buffer
    (fn [{:keys [id seq]}]
      {:context-extra #:icmpv4{:id id :seq seq}})))
@@ -58,4 +58,4 @@
   (parse-icmpv4-echo type buffer))
 
 (defmethod pkt/parse :icmpv4-redirect [type _context buffer]
-  (pkt/parse-packet st-icmpv4-redirect type buffer))
+  (pkt/unpack-packet st-icmpv4-redirect type buffer))
