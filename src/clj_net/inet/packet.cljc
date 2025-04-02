@@ -37,8 +37,8 @@
 
 (defn parse-all
   "Parse all buffer to many packets (layers), and context."
-  [type context buffer]
-  (loop [layers [] trail (b/empty) next-info {:type type} context context buffer buffer]
+  [next-info context buffer]
+  (loop [layers [] trail (b/empty) next-info next-info context context buffer buffer]
     (if (b/empty? buffer)
       [layers context]
       (let [{:keys [type length]} next-info

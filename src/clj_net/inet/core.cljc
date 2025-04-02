@@ -13,5 +13,5 @@
             clj-net.inet.dhcpv4
             clj-net.inet.dhcpv6))
 
-(defn parse-ether [buffer] (pkt/parse-all :ether {} buffer))
-(defn parse-ip [buffer] (pkt/parse-all :ip {} buffer))
+(defn parse-ether [buffer] (pkt/parse-all {:type :ether} {} buffer))
+(defn parse-ip [buffer] (pkt/parse-all {:type :ip} {} buffer))
