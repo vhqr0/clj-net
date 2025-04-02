@@ -53,5 +53,5 @@
   (pkt/parse-packet
    st-ipv4 type buffer
    (fn [{:keys [id proto offset src dst ihl len options]}]
-     (merge (ip/parse-ip-result 4 id proto src dst (- len (* 5 ihl)) offset)
+     (merge (ip/parse-ip-result 4 id proto src dst (- len (* 4 ihl)) offset)
             {:data-extra {:options (parse-ipv4-options options)}}))))

@@ -123,7 +123,11 @@
 (def st-dhcpv4-option
   (st/keys
    :type st/uint8
-   :data (st/bytes-var st/uint8)))
+   :data (st/lazy
+          (fn [{:keys [type]}]
+            (case type
+              (0 255) (st/bytes-fixed 0)
+              (st/bytes-var st/uint8))))))
 
 (def st-dhcpv4-option-subnet-mask
   ia/st-ipv4)
@@ -132,7 +136,7 @@
   (st/coll-of ia/st-ipv4))
 
 (def st-dhcpv4-option-hostname
-  dns/st-dns-name)
+  st/str)
 
 (def st-dhcpv4-option-domain
   st/str)

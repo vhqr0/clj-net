@@ -95,7 +95,7 @@
    :type st/uint16-be
    :class st/uint16-be
    :ttl st/uint32-be
-   :rdata (st/bytes-var st/uint16-be)))
+   :data (st/bytes-var st/uint16-be)))
 
 (def st-dns-qr
   (st/keys
@@ -170,7 +170,7 @@
     (defmethod parse-dns-rr i [option] (pkt/parse-option option k st))
     (defmethod parse-dns-rr i [option] (pkt/parse-option option k))))
 
-(defmethod pkt/parse :dns [type buffer]
+(defmethod pkt/parse :dns [type _context buffer]
   (pkt/parse-packet
    st-dns type buffer
    (fn [{:keys [an ns ar]}]
