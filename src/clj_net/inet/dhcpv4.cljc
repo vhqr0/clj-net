@@ -190,11 +190,14 @@
   (fn [option] (:type option)))
 
 (defmethod parse-dhcpv4-option :default [option] option)
+(defmethod parse-dhcpv4-option   0 [_optoion] {:type :pad})
+(defmethod parse-dhcpv4-option 255 [_optoion] {:type :end})
 
 (doseq [[k i] (:k->i dhcpv4-option-map)]
-  (if-let [st (get dhcpv4-option-st-map k)]
-    (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k st))
-    (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k))))
+  (when-not (contains? #{0 255} i)
+    (if-let [st (get dhcpv4-option-st-map k)]
+      (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k st))
+      (defmethod parse-dhcpv4-option i [option] (pkt/parse-option option k)))))
 
 (defn parse-dhcpv4-options
   [b]
