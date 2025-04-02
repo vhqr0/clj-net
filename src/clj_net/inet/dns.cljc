@@ -158,7 +158,8 @@
    :a st-dns-rr-a
    :aaaa st-dns-rr-aaaa
    :txt st-dns-rr-txt
-   :mx st-dns-rr-mx})
+   :mx st-dns-rr-mx
+   :soa st-dns-rr-soa})
 
 (defmulti parse-dns-rr
   (fn [option] (:type option)))
@@ -177,4 +178,4 @@
      (let [an (->> an (mapv parse-dns-rr))
            ns (->> ns (mapv parse-dns-rr))
            ar (->> ar (mapv parse-dns-rr))]
-       {:data-extra {:an an :ns ns :ar ar}}))))
+       {:data-extra {:an an :ns ns :ar ar :buffer :buffer}}))))
