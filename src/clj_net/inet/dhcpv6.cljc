@@ -27,7 +27,7 @@
 (def st-dhcpv6-msg-type
   (st/enum st/uint8 dhcpv6-msg-type-map))
 
-(def st-dhcpv6-relay-info
+(def st-dhcpv6-relay
   (st/keys
    :hopcount st/uint8
    :linkaddr ia/st-ipv6
@@ -39,7 +39,7 @@
    :trid (st/lazy
           (fn [{:keys [msg-type]}]
             (case msg-type
-              (:relay-forw :relay-repl) st-dhcpv6-relay-info
+              (:relay-forw :relay-repl) st-dhcpv6-relay
               (st/bytes-fixed 3))))
    :options st/bytes))
 
