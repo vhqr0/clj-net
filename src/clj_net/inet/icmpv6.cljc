@@ -1,5 +1,6 @@
 (ns clj-net.inet.icmpv6
-  (:require [clj-bytes.struct :as st]
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
             [clj-net.inet.packet :as pkt]))
 
@@ -21,24 +22,32 @@
     :icmpv6-nd-redirect    137}))
 
 (def st-icmpv6
-  (st/keys
-   :type st/uint8
-   :code st/uint8
-   :chksum st/uint16-be))
+  (-> (st/keys
+       :type st/uint8
+       :code st/uint8
+       :chksum st/uint16-be)
+      (st/wrap-merge
+       {:type 128 :code 0 :chksum 0})))
 
 (def st-icmpv6-echo
-  (st/keys
-   :id st/uint16-be
-   :seq st/uint16-be))
+  (-> (st/keys
+       :id st/uint16-be
+       :seq st/uint16-be)
+      (st/wrap-merge
+       {:id 0 :seq 0})))
 
 (def st-icmpv6-packet-too-big
-  (st/keys
-   :mtu st/uint32-be))
+  (-> (st/keys
+       :mtu st/uint32-be)
+      (st/wrap-merge
+       {:mtu 1280})))
 
 (def st-icmpv6-nd-rs
-  (st/keys
-   :res st/uint32-be
-   :options st/bytes))
+  (-> (st/keys
+       :res st/uint32-be
+       :options st/bytes)
+      (st/wrap-merge
+       {:res 0 :options (b/empty)})))
 
 (def st-icmpv6-nd-ra
   (-> (st/keys
@@ -49,13 +58,18 @@
        :retranstimer st/uint32-be
        :options st/bytes)
       (st/wrap-vec-destructs
-       {:m-o-res [:m :o :res]})))
+       {:m-o-res [:m :o :res]})
+      (st/wrap-merge
+       {:chlim 0 :m 0 :o 0 :res 0 :routerlifetime 1800
+        :reachabletime 0 :retranstimer 0 :options (b/empty)})))
 
 (def st-icmpv6-nd-ns
-  (st/keys
-   :res st/uint32-be
-   :tgt ia/st-ipv6
-   :options st/bytes))
+  (-> (st/keys
+       :res st/uint32-be
+       :tgt ia/st-ipv6
+       :options st/bytes)
+      (st/wrap-merge
+       {:res 0 :tgt ia/ipv6-zero :options (b/empty)})))
 
 (def st-icmpv6-nd-na
   (-> (st/keys
@@ -63,14 +77,18 @@
        :tgt ia/st-ipv6
        :options st/bytes)
       (st/wrap-vec-destructs
-       {:r-s-o-res [:r :s :o :res]})))
+       {:r-s-o-res [:r :s :o :res]})
+      (st/wrap-merge
+       {:r 1 :s 0 :o 1 :res 0 :tgt ia/ipv6-zero :options (b/empty)})))
 
 (def st-icmpv6-nd-redirect
-  (st/keys
-   :res st/uint32-be
-   :tgt ia/st-ipv6
-   :dst ia/st-ipv6
-   :options st/bytes))
+  (-> (st/keys
+       :res st/uint32-be
+       :tgt ia/st-ipv6
+       :dst ia/st-ipv6
+       :options st/bytes)
+      (st/wrap-merge
+       {:res 0 :tgt ia/ipv6-zero :dst ia/ipv6-zero :options (b/empty)})))
 
 (def icmpv6-nd-option-map
   (st/->kimap
@@ -103,18 +121,26 @@
        :res2 st/uint32-be
        :prefix ia/st-ipv6)
       (st/wrap-vec-destructs
-       {:l-a-res1 [:l :a :res1]})))
+       {:l-a-res1 [:l :a :res1]})
+      (st/wrap-merge
+       {:prefixlen 64 :l 1 :a 1 :res1 0
+        :validlifetime 0xffffffff :preferredlifetime 0xffffffff
+        :res2 0 :prefix ia/ipv6-zero})))
 
 (def st-icmpv6-nd-option-redirect-hdr
-  (st/keys
-   :res1 st/uint16-be
-   :res2 st/uint32-be
-   :pkt st/bytes))
+  (-> (st/keys
+       :res1 st/uint16-be
+       :res2 st/uint32-be
+       :pkt st/bytes)
+      (st/wrap-merge
+       {:res1 0 :res2 0})))
 
 (def st-icmpv6-nd-option-mtu
-  (st/keys
-   :res st/uint16-be
-   :mtu st/uint32-be))
+  (-> (st/keys
+       :res st/uint16-be
+       :mtu st/uint32-be)
+      (st/wrap-merge
+       {:res 0 :mtu 1280})))
 
 (def icmpv6-nd-option-st-map
   {:src-lladdr st-icmpv6-nd-option-lladdr

@@ -16,18 +16,23 @@
        :src ia/st-ipv6
        :dst ia/st-ipv6)
       (st/wrap-vec-destructs
-       {:version-tc-fl [:version :tc :fl]})))
+       {:version-tc-fl [:version :tc :fl]})
+      (st/wrap-merge
+       {:version 6 :tc 0 :fl 0 :nh 59 :hlim 64
+        :src ia/ipv6-zero :dst ia/ipv6-zero})))
 
 (def st-ipv6-ext
-  (st/keys
-   :nh st/uint8
-   :data (-> st/uint8
-             (st/wrap
-              #(quot (- % 6) 8)
-              #(+ (* 8 %) 6))
-             (st/wrap-validator
-              #(and (nat-int? %) (zero? (mod (- % 6) 8))))
-             st/bytes-var)))
+  (-> (st/keys
+       :nh st/uint8
+       :data (-> st/uint8
+                 (st/wrap
+                  #(quot (- % 6) 8)
+                  #(+ (* 8 %) 6))
+                 (st/wrap-validator
+                  #(and (nat-int? %) (zero? (mod (- % 6) 8))))
+                 st/bytes-var))
+      (st/wrap-merge
+       {:nh 59})))
 
 (def st-ipv6-ext-fragment
   (-> (st/keys
@@ -36,7 +41,9 @@
        :offset-res2-m (st/bits [13 2 1])
        :id st/uint32-be)
       (st/wrap-vec-destructs
-       {:offset-res2-m [:offset :res2 :m]})))
+       {:offset-res2-m [:offset :res2 :m]})
+      (st/wrap-merge
+       {:nh 59 :res1 0 :offset 0 :res2 0 :m 0 :id 0})))
 
 (def ipv6-option-map
   (st/->kimap {:pad1 0 :padn 1}))

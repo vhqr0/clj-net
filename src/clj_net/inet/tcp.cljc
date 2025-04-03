@@ -1,5 +1,6 @@
 (ns clj-net.inet.tcp
-  (:require [clj-bytes.struct :as st]
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]
             [clj-net.inet.packet :as pkt]))
 
 ;; RFC 9293 TCP
@@ -13,14 +14,18 @@
        :seq st/uint32-be
        :ack st/uint32-be
        :dataofs-res (st/bits [4 4])
-       :cwr-ece-urg-ack-psh-rst-syn-fin (st/bits [1 1 1 1 1 1 1 1])
+       :flags (st/bits [1 1 1 1 1 1 1 1])
        :window st/uint16-be
        :chksum st/uint16-be
        :urgptr st/uint16-be
        :options (st/lazy #(st/bytes-fixed (* 4 (- (first (:dataofs-res %)) 5)))))
       (st/wrap-vec-destructs
        {:dataofs-res [:dataofs :res]
-        :cwr-ece-urg-ack-psh-rst-syn-fin [:cwr :ece :urg :ack :psh :rst :syn :fin]})))
+        :flags [:c :e :u :a :p :r :s :f]})
+      (st/wrap-merge
+       {:sport 0 :dport 80 :seq 0 :ack 0 :dtaofs 5 :res 0
+        :c 0 :e 0 :u 0 :a 0 :p 0 :r 0 :s 1 :f 0
+        :window 8192 :chksum 0 :urgptr 0 :options (b/empty)})))
 
 (def tcp-option-map
   (st/->kimap {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6}))
@@ -47,9 +52,11 @@
   (st/coll-of st/uint32-be))
 
 (def st-tcp-option-timestamp
-  (st/keys
-   :tsval st/uint32-be
-   :tsecr st/uint16-be))
+  (-> (st/keys
+       :tsval st/uint32-be
+       :tsecr st/uint16-be)
+      (st/wrap-merge
+       {:tsval 0 :tsecr 0})))
 
 (def tcp-option-st-map
   {:mss st-tcp-option-mss
@@ -78,6 +85,6 @@
   (pkt/unpack-packet
    st-tcp type buffer
    (fn [{:keys [sport dport seq ack window options] :as data}]
-     (let [flags (->> #{:cwr :ece :urg :ack :psh :rst :syn :fin} (remove #(zero? (get data %))) set)]
+     (let [flags (->> #{:c :e :u :a :p :r :s :f} (remove #(zero? (get data %))) set)]
        {:data-extra {:flags flags :options (parse-tcp-options options)}
         :context-extra #:tcp{:sport sport :dport dport :seq seq :ack ack :window window :flags flags}}))))

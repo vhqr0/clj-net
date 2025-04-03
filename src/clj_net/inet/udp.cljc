@@ -13,11 +13,13 @@
     :dhcpv6-server 547}))
 
 (def st-udp
-  (st/keys
-   :sport st/uint16-be
-   :dport st/uint16-be
-   :len st/uint16-be
-   :chksum st/uint16-be))
+  (-> (st/keys
+       :sport st/uint16-be
+       :dport st/uint16-be
+       :len st/uint16-be
+       :chksum st/uint16-be)
+      (st/wrap-merge
+       {:sport 53 :dport 53 :chksum 0})))
 
 (defmethod pkt/parse :udp [type _context buffer]
   (pkt/unpack-packet

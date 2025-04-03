@@ -9,10 +9,12 @@
   (st/->kimap {:arp 0x0806 :ipv4 0x0800 :ipv6 0x86dd}))
 
 (def st-ether
-  (st/keys
-   :dst ia/st-mac
-   :src ia/st-mac
-   :type st/uint16-be))
+  (-> (st/keys
+       :dst ia/st-mac
+       :src ia/st-mac
+       :type st/uint16-be)
+      (st/wrap-merge
+       [:dst ia/mac-zero :src ia/mac-zero :type 0])))
 
 (defmethod pkt/parse :ether [type _context buffer]
   (pkt/unpack-packet

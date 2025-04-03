@@ -24,16 +24,19 @@
   (st/enum st/uint16-be arp-op-map))
 
 (def st-arp
-  (st/keys
-   :hwtype st-arp-hwtype
-   :ptype st-arp-ptype
-   :hwlen (-> st/int8 (st/wrap-validator #(= % 6)))
-   :plen (-> st/int8 (st/wrap-validator #(= % 4)))
-   :op st-arp-op
-   :hwsrc ia/st-mac
-   :psrc ia/st-ipv4
-   :hwdst ia/st-mac
-   :pdst ia/st-ipv4))
+  (-> (st/keys
+       :hwtype st-arp-hwtype
+       :ptype st-arp-ptype
+       :hwlen (-> st/int8 (st/wrap-validator #(= % 6)))
+       :plen (-> st/int8 (st/wrap-validator #(= % 4)))
+       :op st-arp-op
+       :hwsrc ia/st-mac
+       :psrc ia/st-ipv4
+       :hwdst ia/st-mac
+       :pdst ia/st-ipv4)
+      (st/wrap-merge
+       {:hwtype :ether :ptype :ipv4 :hwlen 6 :plen 4 :op :request
+        :hwsrc ia/mac-zero :psrc ia/ipv4-zero :hwdst ia/mac-zero :pdst ia/ipv4-zero})))
 
 (defmethod pkt/parse :arp [type _context buffer]
   (pkt/unpack-packet st-arp type buffer))

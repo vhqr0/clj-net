@@ -1,5 +1,6 @@
 (ns clj-net.inet.ipv4
-  (:require [clj-bytes.struct :as st]
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
             [clj-net.inet.packet :as pkt]
             [clj-net.inet.ip :as ip]))
@@ -21,7 +22,10 @@
        :options (st/lazy #(st/bytes-fixed (* 4 (- (second (:version-ihl %)) 5)))))
       (st/wrap-vec-destructs
        {:version-ihl [:version :ihl]
-        :res-df-mf-offset [:res :df :mf :offset]})))
+        :res-df-mf-offset [:res :df :mf :offset]})
+      (st/wrap-merge
+       {:version 4 :ihl 5 :id 0 :res 0 :df 0 :mf 0 :offset 0 :ttl 64 :proto 0 :chksum 0
+        :src ia/ipv4-zero :dst ia/ipv4-zero :options (b/empty)})))
 
 (def ipv4-option-map
   (st/->kimap {:eol 0 :nop 1}))

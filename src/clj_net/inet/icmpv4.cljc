@@ -20,19 +20,25 @@
     :icmpv4-information-reply   16}))
 
 (def st-icmpv4
-  (st/keys
-   :type st/uint8
-   :code st/uint8
-   :chksum st/uint16-be))
+  (-> (st/keys
+       :type st/uint8
+       :code st/uint8
+       :chksum st/uint16-be)
+      (st/wrap-merge
+       {:type 8 :code 0 :chksum 0})))
 
 (def st-icmpv4-echo
-  (st/keys
-   :id st/uint16-be
-   :seq st/uint16-be))
+  (-> (st/keys
+       :id st/uint16-be
+       :seq st/uint16-be)
+      (st/wrap-merge
+       {:id 0 :seq 0})))
 
 (def st-icmpv4-redirect
-  (st/keys
-   :gw ia/st-ipv4))
+  (-> (st/keys
+       :gw ia/st-ipv4)
+      (st/wrap-merge
+       {:gw ia/ipv4-zero})))
 
 (defmethod pkt/parse :icmpv4 [type _context buffer]
   (pkt/unpack-packet
