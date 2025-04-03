@@ -11,7 +11,7 @@
 (defmethod st/pack :clj-net.inet/dns-name [d _st]
   (let [ds (if-not (string? d)
              d
-             (str/split d #"\."))]
+             (str/split d #"\." -1))]
     (loop [bs [] ds ds]
       (if (empty? ds)
         (b/join! (conj bs (-> 0 (st/pack st/uint8))))

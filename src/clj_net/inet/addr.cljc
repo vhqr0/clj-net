@@ -70,7 +70,7 @@
 
 (defmethod of-str :mac [_type s]
   (let [s (str/replace s "-" ":")]
-    (->> (str/split s #":") (mapv hex->int) ->mac)))
+    (->> (str/split s #":" -1) (mapv hex->int) ->mac)))
 
 (defmethod of-bytes :mac [_type b]
   {:pre [(= (b/count b) 6)]}
@@ -97,7 +97,7 @@
   (->IPv4Addr segs))
 
 (defmethod of-str :ipv4 [_type s]
-  (->> (str/split s #"\.") (map str->int) ->ipv4))
+  (->> (str/split s #"\." -1) (map str->int) ->ipv4))
 
 (defmethod of-bytes :ipv4 [_type b]
   {:pre [(= (b/count b) 4)]}
@@ -135,10 +135,10 @@
   ;; NOTICE set limit to -1 to inhibit str/split remove trailing empty segs
   (let [sp (str/split s #"::" -1)]
     (case (count sp)
-      1 (->> (str/split s #":") (mapv hex->int) ->ipv6)
+      1 (->> (str/split s #":" -1) (mapv hex->int) ->ipv6)
       2 (let [[ls rs] sp
-              ls (when (seq ls) (->> (str/split ls #":") (map hex->int)))
-              rs (when (seq rs) (->> (str/split rs #":") (map hex->int)))
+              ls (when (seq ls) (->> (str/split ls #":" -1) (map hex->int)))
+              rs (when (seq rs) (->> (str/split rs #":" -1) (map hex->int)))
               zeros-cnt (- 8 (count ls) (count rs))]
           (->> (concat ls (repeat zeros-cnt 0) rs) vec ->ipv6)))))
 
