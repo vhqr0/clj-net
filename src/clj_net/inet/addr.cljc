@@ -132,9 +132,8 @@
   (->IPv6Addr segs))
 
 (defmethod of-str :ipv6 [_type s]
-  (let [sp (cond-> (str/split s #"::")
-             ;; NOTICE str/split will pop trailling whitespace
-             (str/ends-with? s "::") (conj ""))]
+  ;; NOTICE set limit to -1 to inhibit str/split remove trailing empty segs
+  (let [sp (str/split s #"::" -1)]
     (case (count sp)
       1 (->> (str/split s #":") (mapv hex->int) ->ipv6)
       2 (let [[ls rs] sp
@@ -182,3 +181,7 @@
 (comment
   (-> (b/make 6) (st/unpack-one st-mac)) ; => "00:00:00:00:00:00"
   )
+
+(def mac-zero "00:00:00:00:00:00")
+(def ipv4-zero "0.0.0.0")
+(def ipv6-zero "::")
