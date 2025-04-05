@@ -1,5 +1,6 @@
 (ns clj-net.inet.dhcpv4
-  (:require [clj-bytes.struct :as st]
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
             [clj-net.inet.packet :as pkt]))
 
@@ -7,7 +8,7 @@
 ;; RFC 2132 DHCPv4 options
 
 (def dhcpv4-op-map
-  (st/->kimap {:boot-request 1 :boot-reply 2}))
+  (st/->kimap {:request 1 :reply 2}))
 
 (def st-dhcpv4-op
   (st/enum st/uint8 dhcpv4-op-map))
@@ -21,23 +22,27 @@
 (def dhcpv4-magic 0x63825363)
 
 (def st-dhcpv4
-  (st/keys
-   :op st-dhcpv4-op
-   :htype st-dhcpv4-htype
-   :hlen (-> st/uint8 (st/wrap-validator #(= % 6)))
-   :hops st/uint8
-   :xid st/uint32-be
-   :secs st/uint16-be
-   :flags st/uint16-be
-   :ciaddr ia/st-ipv4
-   :yiaddr ia/st-ipv4
-   :siaddr ia/st-ipv4
-   :giaddr ia/st-ipv4
-   :chaddr (st/bytes-fixed 16)
-   :sname (st/bytes-fixed 64)
-   :file (st/bytes-fixed 128)
-   :magic (-> st/uint32-be (st/wrap-validator #(= % dhcpv4-magic)))
-   :options st/bytes))
+  (-> (st/keys
+       :op st-dhcpv4-op
+       :htype st-dhcpv4-htype
+       :hlen (-> st/uint8 (st/wrap-validator #(= % 6)))
+       :hops st/uint8
+       :xid st/uint32-be
+       :secs st/uint16-be
+       :flags st/uint16-be
+       :ciaddr ia/st-ipv4
+       :yiaddr ia/st-ipv4
+       :siaddr ia/st-ipv4
+       :giaddr ia/st-ipv4
+       :chaddr (st/bytes-fixed 16)
+       :sname (st/bytes-fixed 64)
+       :file (st/bytes-fixed 128)
+       :magic (-> st/uint32-be (st/wrap-validator #(= % dhcpv4-magic)))
+       :options st/bytes)
+      (st/wrap-merge
+       {:op :request :htype :ether :hlen 6 :hops 0 :xid 0 ::secs 0 :flags 0
+        :ciaddr ia/ipv4-zero :yiaddr ia/ipv4-zero :siaddr ia/ipv4-zero :giaddr ia/ipv4-zero
+        :chaddr (b/make 16) :sname (b/make 64) :file (b/make 128) :magic dhcpv4-magic :options (b/empty)})))
 
 (def st-dhcpv4-message-type-map
   (st/->kimap

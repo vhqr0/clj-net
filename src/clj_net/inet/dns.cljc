@@ -11,7 +11,7 @@
 (defmethod st/pack :clj-net.inet/dns-name [d _st]
   (let [ds (if-not (string? d)
              d
-             (str/split d #"\." -1))]
+             (str/split d #"\."))]
     (loop [bs [] ds ds]
       (if (empty? ds)
         (b/join! (conj bs (-> 0 (st/pack st/uint8))))
@@ -90,23 +90,27 @@
   (st/->kimap {:in 1}))
 
 (def st-dns-rr
-  (st/keys
-   :name st-dns-name
-   :type st/uint16-be
-   :class st/uint16-be
-   :ttl st/uint32-be
-   :data (st/bytes-var st/uint16-be)))
+  (-> (st/keys
+       :name st-dns-name
+       :type st/uint16-be
+       :class st/uint16-be
+       :ttl st/uint32-be
+       :data (st/bytes-var st/uint16-be))
+      (st/wrap-merge
+       {:class 1 :ttl 0})))
 
 (def st-dns-qr
-  (st/keys
-   :name st-dns-name
-   :type st/uint16-be
-   :class st/uint16-be))
+  (-> (st/keys
+       :name st-dns-name
+       :type st/uint16-be
+       :class st/uint16-be)
+      (st/wrap-merge
+       {:class 1})))
 
 (def st-dns
   (-> (st/keys
        :id st/uint16-be
-       :qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode (st/bits [1 4 1 1 1 1 1 1 1 4])
+       :qr-opcode-aa-tc-rd-ra-z-ad-cd-rcode (st/bits [1 4 1 1 1 1 1 1 1 4])
        :qdcount st/uint16-be
        :ancount st/uint16-be
        :nscount st/uint16-be
@@ -116,7 +120,10 @@
        :ns (st/lazy #(st/coll-of (:nscount %) st-dns-rr))
        :ar (st/lazy #(st/coll-of (:arcount %) st-dns-rr)))
       (st/wrap-vec-destructs
-       {:qr-opcode-aa-tc-rd-ra-z-ad-ac-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :ac :rcode]})))
+       {:qr-opcode-aa-tc-rd-ra-z-ad-cd-rcode [:qr :opcode :aa :tc :rd :ra :z :ad :cd :rcode]})
+      (st/wrap-merge
+       {:id 0 :qr 0 :opcode 0 :aa 0 :tc 0 :rd 1 :ra 0 :z 0 :ad 0 :cd 0 :rcode 0
+        :qdcount 0 :ancount 0 :nscount 0 :arcount 0 :qd [] :an [] :ns [] :ar []})))
 
 (def st-dns-rr-cname
   st-dns-name)

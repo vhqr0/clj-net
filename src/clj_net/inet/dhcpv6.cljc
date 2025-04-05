@@ -1,5 +1,6 @@
 (ns clj-net.inet.dhcpv6
-  (:require [clj-bytes.struct :as st]
+  (:require [clj-bytes.core :as b]
+            [clj-bytes.struct :as st]
             [clj-net.inet.addr :as ia]
             [clj-net.inet.packet :as pkt]
             [clj-net.inet.dns :as dns]))
@@ -28,20 +29,24 @@
   (st/enum st/uint8 dhcpv6-msg-type-map))
 
 (def st-dhcpv6-relay
-  (st/keys
-   :hopcount st/uint8
-   :linkaddr ia/st-ipv6
-   :peeraddr ia/st-ipv6))
+  (-> (st/keys
+       :hopcount st/uint8
+       :linkaddr ia/st-ipv6
+       :peeraddr ia/st-ipv6)
+      (st/wrap-merge
+       {:hopcount 0 :linkaddr ia/ipv6-zero :peeraddr ia/ipv6-zero})))
 
 (def st-dhcpv6
-  (st/keys
-   :msg-type st-dhcpv6-msg-type
-   :trid (st/lazy
-          (fn [{:keys [msg-type]}]
-            (case msg-type
-              (:relay-forw :relay-repl) st-dhcpv6-relay
-              (st/bytes-fixed 3))))
-   :options st/bytes))
+  (-> (st/keys
+       :msg-type st-dhcpv6-msg-type
+       :trid (st/lazy
+              (fn [{:keys [msg-type]}]
+                (case msg-type
+                  (:relay-forw :relay-repl) st-dhcpv6-relay
+                  (st/bytes-fixed 3))))
+       :options st/bytes)
+      (st/wrap-merge
+       {:msg-type :solicit :trid (b/make 3) :options (b/empty)})))
 
 (def dhcpv6-duid-type-map
   (st/->kimap {:llt 1 :en 2 :ll 3 :uuid 4}))
