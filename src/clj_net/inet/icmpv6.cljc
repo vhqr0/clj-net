@@ -121,26 +121,18 @@
        :res2 st/uint32-be
        :prefix ia/st-ipv6)
       (st/wrap-vec-destructs
-       {:l-a-res1 [:l :a :res1]})
-      (st/wrap-merge
-       {:prefixlen 64 :l 1 :a 1 :res1 0
-        :validlifetime 0xffffffff :preferredlifetime 0xffffffff
-        :res2 0 :prefix ia/ipv6-zero})))
+       {:l-a-res1 [:l :a :res1]})))
 
 (def st-icmpv6-nd-option-redirect-hdr
-  (-> (st/keys
-       :res1 st/uint16-be
-       :res2 st/uint32-be
-       :pkt st/bytes)
-      (st/wrap-merge
-       {:res1 0 :res2 0})))
+  (st/keys
+   :res1 st/uint16-be
+   :res2 st/uint32-be
+   :pkt st/bytes))
 
 (def st-icmpv6-nd-option-mtu
-  (-> (st/keys
-       :res st/uint16-be
-       :mtu st/uint32-be)
-      (st/wrap-merge
-       {:res 0 :mtu 1280})))
+  (st/keys
+   :res st/uint16-be
+   :mtu st/uint32-be))
 
 (def icmpv6-nd-option-st-map
   {:src-lladdr st-icmpv6-nd-option-lladdr

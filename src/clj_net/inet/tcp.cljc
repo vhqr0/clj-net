@@ -52,11 +52,9 @@
   (st/coll-of st/uint32-be))
 
 (def st-tcp-option-timestamp
-  (-> (st/keys
-       :tsval st/uint32-be
-       :tsecr st/uint16-be)
-      (st/wrap-merge
-       {:tsval 0 :tsecr 0})))
+  (st/keys
+   :tsval st/uint32-be
+   :tsecr st/uint16-be))
 
 (def tcp-option-st-map
   {:mss st-tcp-option-mss

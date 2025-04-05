@@ -9,33 +9,40 @@
 ;; RFC 3596 DNS AAAA
 
 (defmethod st/pack :clj-net.inet/dns-name [d _st]
+  {:pre [(or (and (vector? d) (int? (last d)))
+             (and (string? d) (str/ends-with? d ".")))]}
   (let [ds (if-not (string? d)
              d
-             (str/split d #"\."))]
+             (str/split d #"\." -1))]
     (loop [bs [] ds ds]
-      (if (empty? ds)
-        (b/join! (conj bs (-> 0 (st/pack st/uint8))))
-        (let [d (first ds)]
-          (if (string? d)
-            (let [b (b/of-str d)
-                  c (-> (b/count b) (st/pack st/uint8))]
-              (recur (conj bs c b) (rest ds)))
-            (let [b (-> (+ 0xc000 d) (st/pack st/uint16-be))]
-              (b/join! (conj bs b)))))))))
+      (let [d (first ds)]
+        (cond
+          ;; pointer end
+          (int? d)
+          (let [b (-> (+ 0xc000 d) (st/pack st/uint16-be))]
+            (b/join! (conj bs b)))
+          ;; empty end
+          (empty? d)
+          (b/join! (conj bs (-> 0 (st/pack st/uint8))))
+          ;; continue
+          :else
+          (let [b (b/of-str d)
+                c (-> (b/count b) (st/pack st/uint8))]
+            (recur (conj bs c b) (rest ds))))))))
 
 (defmethod st/unpack :clj-net.inet/dns-name [b _st]
   (loop [ds [] b b]
     (when-let [[c b] (-> b (st/unpack st/uint8))]
       (cond
-        ;; zero end
+        ;; empty end
         (zero? c)
-        [(str/join \. ds) b]
+        [(str/join \. (conj ds "")) b]
         ;; pointer end
         (= (bit-and c 0xc0) 0xc0)
         (when-let [[r b] (-> b (st/unpack st/uint8))]
           (let [c (+ (bit-shift-left (bit-and c 0x3f) 8) r)]
             [(conj ds c) b]))
-        ;; non-end
+        ;; continue
         :else
         (let [st (-> (st/bytes-fixed c) st/wrap-str)]
           (when-let [[d b] (-> b (st/unpack st))]
@@ -46,7 +53,7 @@
 
 ^:rct/test
 (comment
-  (b/equal? (-> "google.com" (st/pack st-dns-name))
+  (b/equal? (-> "google.com." (st/pack st-dns-name))
             (b/concat!
              (b/of-useq [6]) (b/of-str "google")
              (b/of-useq [3]) (b/of-str "com")
@@ -57,7 +64,7 @@
        (b/of-useq [3]) (b/of-str "com")
        (b/of-useq [0]))
       (st/unpack-one st-dns-name))
-  ;; => "google.com"
+  ;; => "google.com."
   (b/equal? (-> ["google" 20] (st/pack st-dns-name))
             (b/concat! (b/of-useq [6]) (b/of-str "google") (b/of-useq [0xc0 20])))
   ;; => true
