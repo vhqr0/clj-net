@@ -16,7 +16,7 @@
        :dataofs-res (st/bits [4 4])
        :flags (st/bits [1 1 1 1 1 1 1 1])
        :window st/uint16-be
-       :chksum st/uint16-be
+       :checksum st/uint16-be
        :urgptr st/uint16-be
        :options (st/lazy #(st/bytes-fixed (* 4 (- (first (:dataofs-res %)) 5)))))
       (st/wrap-vec-destructs
@@ -25,7 +25,7 @@
       (st/wrap-merge
        {:sport 0 :dport 80 :seq 0 :ack 0 :dtaofs 5 :res 0
         :c 0 :e 0 :u 0 :a 0 :p 0 :r 0 :s 1 :f 0
-        :window 8192 :chksum 0 :urgptr 0 :options (b/empty)})))
+        :window 8192 :checksum 0 :urgptr 0 :options (b/empty)})))
 
 (def tcp-option-map
   (st/->kimap {:eol 0 :nop 1 :mss 2 :wscale 3 :sack-ok 4 :sack 5 :timestamp 6}))
@@ -74,15 +74,11 @@
     (let [st (get tcp-option-st-map k)]
       (defmethod parse-tcp-option i [option] (pkt/unpack-option st k option)))))
 
-(defn parse-tcp-options
-  [b]
-  (->> (st/unpack-many b st-tcp-option)
-       (mapv parse-tcp-option)))
-
 (defmethod pkt/parse :tcp [type _context buffer]
   (pkt/unpack-packet
    st-tcp type buffer
    (fn [{:keys [sport dport seq ack window options] :as data}]
-     (let [flags (->> #{:c :e :u :a :p :r :s :f} (remove #(zero? (get data %))) set)]
-       {:data-extra {:flags flags :options (parse-tcp-options options)}
+     (let [flags (->> #{:c :e :u :a :p :r :s :f} (remove #(zero? (get data %))) set)
+           options (->> (st/unpack-many options st-tcp-option) (mapv parse-tcp-option))]
+       {:data-extra {:flags flags :options options}
         :context-extra #:tcp{:sport sport :dport dport :seq seq :ack ack :window window :flags flags}}))))

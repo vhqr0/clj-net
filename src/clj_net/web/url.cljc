@@ -3,6 +3,7 @@
             [clojure.string :as str]))
 
 (defn get-query
+  "Get values from query."
   [query k]
   (->> query (filter #(= k (first %))) (mapv second)))
 
@@ -12,19 +13,23 @@
   )
 
 (defn str->query-1
+  "Convert string to one query entry."
   [s]
   (let [[k v] (str/split s #"=" 2)]
     [(str/trim k) (str/trim (or v ""))]))
 
 (defn str->query
+  "Convert string to query."
   [s]
   (->> (str/split s #"&" -1) (mapv str->query-1)))
 
 (defn query-1->str
+  "Convert one query entry to string."
   [[k v]]
   (str k \= v))
 
 (defn query->str
+  "Convert query to string."
   [query]
   (->> query (map query-1->str) (str/join "&")))
 
@@ -34,7 +39,9 @@
   (query->str [["a" "1"] ["b" "2"]]) ; => "a=1&b=2"
   )
 
-(def url-re #"^([a-zA-Z0-9+-\.]+)://(([^@:]*)(:([^@]*))?@)?(\[[0-9a-fA-F:]*\]|[^:/?#]*)(:([0-9]+))?(/[^?#]*)?(\?([^#]*))?(#(.*))?$")
+(def url-re
+  "URL regexp."
+  #"^([a-zA-Z0-9+-\.]+)://(([^@:]*)(:([^@]*))?@)?(\[[^\[\]]*\]|[^:/?#]*)(:([0-9]+))?(/[^?#]*)?(\?([^#]*))?(#(.*))?$")
 
 ^:rct/test
 (comment
@@ -49,6 +56,7 @@
   )
 
 (defn str->url
+  "Convert string to url."
   [s]
   (if-let [[_s schema _user-info username _passwrod-group password host _port-group port path _query-group query _fragment-group fragment] (re-matches url-re s)]
     (cond-> {:schema schema :host host}
@@ -73,6 +81,7 @@
   )
 
 (defn url->str
+  "Convert url to string."
   [{:keys [schema host port username password path query fragment] :or {schema "http"}}]
   (str schema "://"
        username

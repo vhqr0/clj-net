@@ -17,9 +17,9 @@
        :sport st/uint16-be
        :dport st/uint16-be
        :len st/uint16-be
-       :chksum st/uint16-be)
+       :checksum st/uint16-be)
       (st/wrap-merge
-       {:sport 53 :dport 53 :chksum 0})))
+       {:sport 53 :dport 53 :checksum 0})))
 
 (defmethod pkt/parse :udp [type _context buffer]
   (pkt/unpack-packet

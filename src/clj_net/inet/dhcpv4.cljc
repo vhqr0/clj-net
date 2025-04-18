@@ -7,24 +7,26 @@
 ;; RFC 2131 DHCPv4
 ;; RFC 2132 DHCPv4 options
 
+(def dhcpv4-magic 0x63825363)
+
 (def dhcpv4-op-map
   (st/->kimap {:request 1 :reply 2}))
 
-(def st-dhcpv4-op
-  (st/enum st/uint8 dhcpv4-op-map))
-
-(def dhcpv4-htype-map
-  (st/->kimap {:ether 1}))
-
-(def st-dhcpv4-htype
-  (st/enum st/uint8 dhcpv4-htype-map))
-
-(def dhcpv4-magic 0x63825363)
+(def dhcpv4-message-type-map
+  (st/->kimap
+   {:discover 1
+    :offer    2
+    :request  3
+    :decline  4
+    :ack      5
+    :nak      6
+    :release  7
+    :inform   8}))
 
 (def st-dhcpv4
   (-> (st/keys
-       :op st-dhcpv4-op
-       :htype st-dhcpv4-htype
+       :op st/uint8
+       :htype st/uint8
        :hlen (-> st/uint8 (st/wrap-validator #(= % 6)))
        :hops st/uint8
        :xid st/uint32-be
@@ -40,23 +42,9 @@
        :magic (-> st/uint32-be (st/wrap-validator #(= % dhcpv4-magic)))
        :options st/bytes)
       (st/wrap-merge
-       {:op :request :htype :ether :hlen 6 :hops 0 :xid 0 ::secs 0 :flags 0
+       {:op 1 :htype 1 :hlen 6 :hops 0 :xid 0 ::secs 0 :flags 0
         :ciaddr ia/ipv4-zero :yiaddr ia/ipv4-zero :siaddr ia/ipv4-zero :giaddr ia/ipv4-zero
         :chaddr (b/make 16) :sname (b/make 64) :file (b/make 128) :magic dhcpv4-magic :options (b/empty)})))
-
-(def st-dhcpv4-message-type-map
-  (st/->kimap
-   {:discover 1
-    :offer    2
-    :request  3
-    :decline  4
-    :ack      5
-    :nak      6
-    :release  7
-    :inform   8}))
-
-(def st-dhcpv4-message-type
-  (st/enum st/uint8 st-dhcpv4-message-type-map))
 
 (def dhcpv4-option-map
   (st/->kimap
@@ -161,7 +149,7 @@
   st/uint32-be)
 
 (def st-dhcpv4-option-message-type
-  st-dhcpv4-message-type)
+  st/uint8)
 
 (def st-dhcpv4-option-server-id
   ia/st-ipv4)
@@ -203,16 +191,11 @@
     (let [st (get dhcpv4-option-st-map k)]
       (defmethod parse-dhcpv4-option i [option] (pkt/unpack-option st k option)))))
 
-(defn parse-dhcpv4-options
-  [b]
-  (->> (st/unpack-many b st-dhcpv4-option)
-       (mapv parse-dhcpv4-option)))
-
 (defmethod pkt/parse :dhcpv4 [type _context buffer]
   (pkt/unpack-packet
    st-dhcpv4 type buffer
    (fn [{:keys [options]}]
-     (let [options (parse-dhcpv4-options options)]
+     (let [options (->> (st/unpack-many options st-dhcpv4-option) (mapv parse-dhcpv4-option))]
        {:data-extra {:options options}}))))
 
 (defmethod pkt/parse :dhcpv4-client [_type context buffer] (pkt/parse :dhcpv4 context buffer))

@@ -23,9 +23,9 @@
   (-> (st/keys
        :type st/uint8
        :code st/uint8
-       :chksum st/uint16-be)
+       :checksum st/uint16-be)
       (st/wrap-merge
-       {:type 8 :code 0 :chksum 0})))
+       {:type 8 :code 0 :checksum 0})))
 
 (def st-icmpv4-echo
   (-> (st/keys

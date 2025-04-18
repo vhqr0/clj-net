@@ -5,7 +5,7 @@
             [clj-bytes.struct :as st]))
 
 (defn get-header
-  "Get header in headers."
+  "Get value from headers."
   [headers k]
   (let [k (cond-> k (keyword? k) name)
         k (str/lower-case k)]
@@ -22,6 +22,7 @@
   )
 
 (defn str->header
+  "Convert string to one header."
   [s]
   (let [[k v] (str/split s #":" 2)]
     (if (nil? v)
@@ -29,14 +30,17 @@
       [(str/trim k) (str/trim v)])))
 
 (defn str->headers
+  "Convert string to headers."
   [s]
   (->> (str/split s #"\r\n" -1) (mapv str->header)))
 
 (defn header->str
+  "Convert one header to string."
   [[k v]]
   (str k \: \space v))
 
 (defn headers->str
+  "Convert headers to string."
   [headers]
   (->> headers (map header->str) (str/join "\r\n")))
 
@@ -46,15 +50,19 @@
   (headers->str [["Host" "google.com"] ["Connection" "close"]]) ; => "Host: google.com\r\nConnection: close"
   )
 
-(def req-line-re #"^([a-zA-Z]+)\s+([^\s]+)\s+[Hh][Tt][Tt][Pp]/([0-9\.]+)$")
+(def req-line-re
+  "HTTP request line regexp."
+  #"^([a-zA-Z]+)\s+([^\s]+)\s+[Hh][Tt][Tt][Pp]/([0-9\.]+)$")
 
 (defn str->req-line
+  "Convert string to request line."
   [s]
   (if-let [[_s method path version] (re-matches req-line-re s)]
     [method path version]
     (throw (ex-info "http request line validation error" {:reason :struct-error}))))
 
 (defn req-line->str
+  "Convert request line to string."
   [[method path version]]
   (let [path (or path "/")
         version (or version "1.1")]
@@ -67,15 +75,19 @@
   (req-line->str ["GET"]) ; => "GET / HTTP/1.1"
   )
 
-(def resp-line-re #"^[Hh][Tt][Tt][Pp]/([0-9\.]+)\s+([0-9][0-9][0-9])\s+([a-zA-Z]+)$")
+(def resp-line-re
+  "HTTP response line regexp."
+  #"^[Hh][Tt][Tt][Pp]/([0-9\.]+)\s+([0-9][0-9][0-9])\s+([a-zA-Z]+)$")
 
 (defn str->resp-line
+  "Convert string to response line."
   [s]
   (if-let [[_s version status reason] (re-matches resp-line-re s)]
     [version status reason]
     (throw (ex-info "http response line validation error" {:reason :struct-error}))))
 
 (defn resp-line->str
+  "Conert response line to string."
   [[version status reason]]
   (str "HTTP/" version \space status \space reason))
 

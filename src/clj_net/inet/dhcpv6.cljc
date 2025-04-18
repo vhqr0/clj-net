@@ -25,8 +25,18 @@
     :relay-forw          12
     :relay-repl          13}))
 
-(def st-dhcpv6-msg-type
-  (st/enum st/uint8 dhcpv6-msg-type-map))
+(def dhcpv6-duid-type-map
+  (st/->kimap {:llt 1 :en 2 :ll 3 :uuid 4}))
+
+(def dhcpv6-status-code-map
+  (st/->kimap
+   {:success         0
+    :unspec-fail     1
+    :no-addrs-avail  2
+    :no-binding      3
+    :not-on-link     4
+    :use-multicast   5
+    :no-prefix-avail 6}))
 
 (def st-dhcpv6-relay
   (-> (st/keys
@@ -38,47 +48,28 @@
 
 (def st-dhcpv6
   (-> (st/keys
-       :msg-type st-dhcpv6-msg-type
+       :msg-type st/uint8
        :trid (st/lazy
               (fn [{:keys [msg-type]}]
                 (case msg-type
-                  (:relay-forw :relay-repl) st-dhcpv6-relay
+                  (12 13) st-dhcpv6-relay
                   (st/bytes-fixed 3))))
        :options st/bytes)
       (st/wrap-merge
        {:msg-type :solicit :trid (b/make 3) :options (b/empty)})))
 
-(def dhcpv6-duid-type-map
-  (st/->kimap {:llt 1 :en 2 :ll 3 :uuid 4}))
-
-(def dhcpv6-hwtype-map
-  (st/->kimap {:ether 1}))
-
-(def st-dhcpv6-hwtype
-  (st/enum st/uint16-be dhcpv6-hwtype-map))
-
 (def st-dhcpv6-duid-llt
   (st/keys
    :type (-> st/uint8 (st/wrap-validator #(= % 1)))
-   :hwtype st-dhcpv6-hwtype
+   :hwtype st/uint16-be
    :timeval st/uint32-be
    :lladdr ia/st-mac))
 
 (def st-dhcpv6-duid-ll
   (st/keys
    :type (-> st/uint8 (st/wrap-validator #(= % 3)))
-   :hwtype st-dhcpv6-hwtype
+   :hwtype st/uint16-be
    :lladdr ia/st-mac))
-
-(def dhcpv6-status-code-map
-  (st/->kimap
-   {:success         0
-    :unspec-fail     1
-    :no-addrs-avail  2
-    :no-binding      3
-    :not-on-link     4
-    :use-multicast   5
-    :no-prefix-avail 6}))
 
 (def dhcpv6-option-map
   (st/->kimap
@@ -214,16 +205,11 @@
   (let [st (get dhcpv6-option-st-map k)]
     (defmethod parse-dhcpv6-option i [option] (pkt/unpack-option st k option))))
 
-(defn parse-dhcpv6-options
-  [b]
-  (->> (st/unpack-many b st-dhcpv6-option)
-       (mapv parse-dhcpv6-option)))
-
 (defmethod pkt/parse :dhcpv6 [type _context buffer]
   (pkt/unpack-packet
    st-dhcpv6 type buffer
    (fn [{:keys [options]}]
-     (let [options (parse-dhcpv6-options options)]
+     (let [options (->> (st/unpack-many options st-dhcpv6-option) (mapv parse-dhcpv6-option))]
        {:data-extra {:options options}}))))
 
 (defmethod pkt/parse :dhcpv6-client [_type context buffer] (pkt/parse :dhcpv6 context buffer))

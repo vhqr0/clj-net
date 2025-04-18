@@ -52,8 +52,7 @@
                 layers (cond-> layers
                          (not (b/empty? trail)) (conj {:type :raw :buffer trail}))]
             [layers context])
-          (let [[{:keys [type data data-extra context-extra next-info]} buffer] parse-res
-                layer (merge {:type type :data data} data-extra)
+          (let [[{:keys [context-extra next-info] :as layer} buffer] parse-res
                 context (merge context context-extra)]
             (recur (conj layers layer) trail next-info context buffer)))))))
 

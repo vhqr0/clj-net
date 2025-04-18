@@ -19,12 +19,13 @@
 
 (defn packet-seq
   [r]
-  (->> (pcap-seq r) rest (map :data)))
-
-(defn parsed-packet-seq
-  [r]
-  (->> (packet-seq r) (map inet/parse-ether)))
+  (->> (pcap-seq r)
+       rest
+       (map
+        (fn [{:keys [data] :as packet-info}]
+          (let [[layers context] (inet/parse-ether data)]
+            {:layers layers :context context :packet-info packet-info})))))
 
 (defn read-pcap
   [f]
-  (parsed-packet-seq (io/input-stream f)))
+  (packet-seq (io/input-stream f)))

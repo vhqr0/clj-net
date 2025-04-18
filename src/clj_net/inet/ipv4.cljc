@@ -16,7 +16,7 @@
        :res-df-mf-offset (st/bits [1 1 1 13])
        :ttl st/uint8
        :proto st/uint8
-       :chksum st/uint16-be
+       :checksum st/uint16-be
        :src ia/st-ipv4
        :dst ia/st-ipv4
        :options (st/lazy #(st/bytes-fixed (* 4 (- (second (:version-ihl %)) 5)))))
@@ -24,7 +24,7 @@
        {:version-ihl [:version :ihl]
         :res-df-mf-offset [:res :df :mf :offset]})
       (st/wrap-merge
-       {:version 4 :ihl 5 :id 0 :res 0 :df 0 :mf 0 :offset 0 :ttl 64 :proto 0 :chksum 0
+       {:version 4 :ihl 5 :id 0 :res 0 :df 0 :mf 0 :offset 0 :ttl 64 :proto 0 :checksum 0
         :src ia/ipv4-zero :dst ia/ipv4-zero :options (b/empty)})))
 
 (def ipv4-option-map
@@ -48,14 +48,10 @@
 (defmethod parse-ipv4-option 0 [_option] {:type :eol})
 (defmethod parse-ipv4-option 1 [_option] {:type :nop})
 
-(defn parse-ipv4-options
-  [b]
-  (->> (st/unpack-many b st-ipv4-option)
-       (mapv parse-ipv4-option)))
-
 (defmethod pkt/parse :ipv4 [type _context buffer]
   (pkt/unpack-packet
    st-ipv4 type buffer
    (fn [{:keys [id proto offset src dst ihl len options]}]
-     (merge (ip/parse-ip-result 4 id proto src dst (- len (* 4 ihl)) offset)
-            {:data-extra {:options (parse-ipv4-options options)}}))))
+     (let [options (->> (st/unpack-many options st-ipv4-option) (mapv parse-ipv4-option))]
+       (merge (ip/parse-ip-result 4 id proto src dst (- len (* 4 ihl)) offset)
+              {:data-extra {:options options}})))))

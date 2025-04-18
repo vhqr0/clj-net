@@ -51,7 +51,7 @@
 
 (defn parse-ip-ext-result
   ([proto]
-   (parse-ip-ext-result proto nil))
+   (parse-ip-ext-result proto 0))
   ([proto offset]
    {:context-extra #:ip{:proto proto :offset offset}
     :next-info {:type (when (zero? offset) [:ip proto])}}))

@@ -54,6 +54,7 @@
       (st/wrap-validator (comp nat-int? :len))))
 
 (defn mask-st
+  "Mask frame struct."
   [{:keys [header data]}]
   (let [{:keys [mask key]} header]
     (if (zero? mask)
