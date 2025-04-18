@@ -4,6 +4,15 @@
 
 ;; RFC 6455
 
+(def opcode-map
+  (st/->kimap
+   {:continue  0
+    :text      1
+    :binary    2
+    :close     8
+    :ping      9
+    :pong     10}))
+
 (defn mask-data!
   "Mask data, impure."
   [data key]
@@ -16,14 +25,13 @@
   [data key]
   (mask-data! (b/sub data) key))
 
-(def opcode-map
-  (st/->kimap
-   {:continue  0
-    :text      1
-    :binary    2
-    :close     8
-    :ping      9
-    :pong     10}))
+(defn mask-st
+  "Mask frame struct."
+  [{:keys [header data]}]
+  (let [{:keys [mask key]} header]
+    (if (zero? mask)
+      data
+      (mask-data data key))))
 
 (def st-frame-header
   (-> (st/keys
@@ -52,14 +60,6 @@
                          :else len)]
            (assoc d :len len))))
       (st/wrap-validator (comp nat-int? :len))))
-
-(defn mask-st
-  "Mask frame struct."
-  [{:keys [header data]}]
-  (let [{:keys [mask key]} header]
-    (if (zero? mask)
-      data
-      (mask-data data key))))
 
 (def st-frame
   (-> (st/keys
